@@ -1,0 +1,9 @@
+[project]
+name = "lep-backend"
+version = "0.1.0"
+description = "Luminode ERP Platform backend application"
+requires-python = ">=3.12,<3.13"
+
+[tool.lep]
+source-root = "src/lep"
+module-layout = "api,application,domain,infrastructure,events,permissions,tests"

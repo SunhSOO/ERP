@@ -1,0 +1,33 @@
+stages:
+  - backend
+  - frontend
+  - security
+
+backend-quality:
+  stage: backend
+  image: python:3.12-slim
+  script:
+    - pip install --no-cache-dir uv
+    - uv sync --frozen
+    - uv run pytest apps/backend/tests/architecture -q
+    - uv run ruff check .
+    - uv run mypy apps/backend/src apps/backend/tests scripts
+    - uv run pytest apps/backend/tests -q
+    - python scripts/check_boundaries.py
+
+frontend-quality:
+  stage: frontend
+  image: node:24-alpine
+  script:
+    - corepack enable
+    - pnpm install --frozen-lockfile
+    - pnpm lint
+    - pnpm typecheck
+    - pnpm build
+
+secret-scan:
+  stage: security
+  image: alpine:3.22
+  script:
+    - apk add --no-cache git
+    - '! git grep -nE "AKIA[0-9A-Z]{16}|-----BEGIN (RSA|EC|OPENSSH) PRIVATE KEY-----|xox[baprs]-" -- .'

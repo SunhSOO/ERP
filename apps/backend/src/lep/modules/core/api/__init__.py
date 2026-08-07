@@ -1,0 +1,1 @@
+"""Core HTTP interface boundary."""

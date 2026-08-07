@@ -14,5 +14,6 @@ out/
 dist/
 coverage/
 *.log
+*.tsbuildinfo
 .worktrees/
 worktrees/

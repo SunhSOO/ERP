@@ -37,7 +37,7 @@
 
 ```text
 Work Package: WP-PLT-001
-Base Commit: fd8fd7ede149968cba4eaf0cc4c9042aba348721
+Base Commit: d8148a7c44b41d1628d5ae18a4404b34c90f53db
 Owner: Platform Backend Agent
 In Scope: repository baseline, FastAPI/Next.js minimal paths, core module boundary checker, health/live, trace/logging, cross-platform verification, CI quality jobs
 Out of Scope: authentication, organization, RBAC, business modules, database migrations, Docker Compose, AI/RAG, real ERP screens and data
