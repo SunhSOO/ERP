@@ -53,6 +53,8 @@ class RepoActivity:
     commits: list[tuple[str, str, set[str]]]
     issues: list[tuple[str, str, str, set[str]]]
     pushed_at: datetime
+    #: Work on the default branch is the plan of record, not a deviation.
+    default_branch: str = "main"
 
 
 def extract_codes(*texts: str) -> set[str]:
@@ -176,6 +178,7 @@ class GitHubVcsAdapter:
             commits=commit_rows,
             issues=issue_rows,
             pushed_at=pushed_at,
+            default_branch=str(repository.get("default_branch") or "main"),
         )
 
     # ── reconciliation ─────────────────────────────────────────────────────
@@ -272,7 +275,11 @@ class GitHubVcsAdapter:
 
         # Branches carrying a code nobody has opened a pull request for still
         # count as linked work; they are what this repository currently has.
+        seen_refs = {ref for ref, *_ in activity.pull_requests}
         for name, codes in activity.branches:
+            if name == activity.default_branch:
+                continue
+
             known = codes & by_code.keys()
             matched_codes |= known
             for code in sorted(known):
@@ -284,6 +291,37 @@ class GitHubVcsAdapter:
                         vcs_ref=f"브랜치 {name}",
                         task_status=task_status,
                         aligned=True,
+                    )
+                )
+
+            # A named branch carrying a work code the plan does not have is the
+            # same gap a stray pull request is: someone is doing work the WBS
+            # cannot see. Branches with no code at all are left alone, since
+            # plenty of them are throwaway.
+            unknown = codes - by_code.keys()
+            if unknown and f"브랜치 {name}" not in seen_refs:
+                label = ", ".join(sorted(unknown))
+                mappings.append(
+                    TaskMapping(
+                        task_code=None,
+                        task_title=f"{label} (WBS에 없는 코드)",
+                        vcs_ref=f"브랜치 {name}",
+                        task_status="vcs_only",
+                        aligned=False,
+                    )
+                )
+                mismatches.append(
+                    Mismatch(
+                        id=f"mis-branch-{name.replace('/', '-')}",
+                        project_id=project_id,
+                        kind=MismatchKind.UNDEFINED_WORK,
+                        title="WBS 외 브랜치 감지",
+                        detail=(
+                            f"브랜치 {name}이 {label} 작업을 진행 중이지만 WBS에 "
+                            f"대응하는 태스크가 없습니다. 저장소 {repo}."
+                        ),
+                        task_code=None,
+                        vcs_ref=f"브랜치 {name}",
                     )
                 )
 

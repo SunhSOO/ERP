@@ -395,3 +395,50 @@ def test_workflow_state_is_kept_as_an_overlay_not_written_to_the_server() -> Non
 
     assert adapter._with_overlay(original).handled is True
     assert adapter._with_overlay(original).note_id == "note-1"
+
+
+def test_default_branch_is_never_reported_as_a_deviation() -> None:
+    """main에서 일어나는 일은 계획 그 자체다. 이탈로 보고하면 소음만 는다."""
+
+    _status, mismatches, mappings = _adapter().reconcile(
+        "prj-daon",
+        "owner/repo",
+        _activity(branches=[("main", {"WP-PLT-001"})], default_branch="main"),
+        [("TSK-1038", "IF 정의서 v2", "blocked")],
+    )
+
+    assert mismatches == []
+    assert mappings == []
+
+
+def test_coded_branch_missing_from_the_wbs_is_undefined_work() -> None:
+    _status, mismatches, mappings = _adapter().reconcile(
+        "prj-daon",
+        "owner/repo",
+        _activity(
+            branches=[
+                ("main", set()),
+                ("feature/WP-PLT-001-bootstrap", {"WP-PLT-001"}),
+            ],
+            default_branch="main",
+        ),
+        [("TSK-1038", "IF 정의서 v2", "blocked")],
+    )
+
+    assert [item.kind.value for item in mismatches] == ["undefined_work"]
+    assert "WP-PLT-001" in mismatches[0].detail
+    assert mappings[0].vcs_ref == "브랜치 feature/WP-PLT-001-bootstrap"
+
+
+def test_branch_without_any_code_is_left_alone() -> None:
+    """코드가 없는 브랜치는 버려지는 실험인 경우가 많다."""
+
+    _status, mismatches, mappings = _adapter().reconcile(
+        "prj-daon",
+        "owner/repo",
+        _activity(branches=[("scratch", set())], default_branch="main"),
+        [("TSK-1038", "IF 정의서 v2", "blocked")],
+    )
+
+    assert mismatches == []
+    assert mappings == []
