@@ -41,6 +41,20 @@ def test_boundary_checker_rejects_cross_module_internal_imports() -> None:
     assert any("cross-module internal import" in violation.message for violation in violations)
 
 
+def test_boundary_checker_rejects_relative_cross_module_internal_imports(tmp_path: Path) -> None:
+    module_root = tmp_path / "modules"
+    source = module_root / "alpha" / "domain" / "entities.py"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "from ...beta.domain.entities import BetaEntity\n",
+        encoding="utf-8",
+    )
+
+    violations = scan_file(source, module_root)
+
+    assert any("cross-module internal import" in violation.message for violation in violations)
+
+
 def test_boundary_checker_rejects_framework_imports_from_domain() -> None:
     fixture_root = REPOSITORY_ROOT / "apps" / "backend" / "tests" / "architecture" / "fixtures"
     module_root = fixture_root / "lep" / "modules"

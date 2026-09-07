@@ -37,10 +37,20 @@ def _module_name(path: Path, module_root: Path) -> str | None:
     return relative.parts[0] if len(relative.parts) > 1 else None
 
 
-def _import_name(node: ast.Import | ast.ImportFrom) -> str:
+def _import_name(node: ast.Import | ast.ImportFrom, path: Path, module_root: Path) -> str:
     if isinstance(node, ast.Import):
         return node.names[0].name
-    return node.module or ""
+    if node.level == 0:
+        return node.module or ""
+
+    relative = path.relative_to(module_root)
+    package_parts = ["lep", "modules", *relative.parts[:-1]]
+    ancestor_count = node.level - 1
+    if ancestor_count > len(package_parts):
+        return ""
+    base_parts = package_parts[: len(package_parts) - ancestor_count]
+    imported_parts = [part for part in (node.module or "").split(".") if part]
+    return ".".join([*base_parts, *imported_parts])
 
 
 def scan_file(path: Path, module_root: Path) -> list[Violation]:
@@ -57,7 +67,7 @@ def scan_file(path: Path, module_root: Path) -> list[Violation]:
     for node in ast.walk(tree):
         if not isinstance(node, ast.Import | ast.ImportFrom):
             continue
-        imported = _import_name(node)
+        imported = _import_name(node, path, module_root)
         if in_domain and imported.split(".", 1)[0] in FORBIDDEN_DOMAIN_IMPORTS:
             violations.append(
                 Violation(path, node.lineno, "domain layer imports infrastructure framework")

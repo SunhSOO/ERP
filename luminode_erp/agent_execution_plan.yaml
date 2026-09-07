@@ -1,0 +1,1488 @@
+project: Luminode ERP Platform
+version: '1.0'
+approved_design_date: '2026-08-05'
+phase_gate_policy: strict
+default_concurrency:
+  implementation_agents: 3
+  review_agents: 2
+  integration_agents: 1
+branch_pattern: feature/{work_package_id}-{slug}
+states:
+- proposed
+- ready
+- contract_review
+- in_progress
+- self_tested
+- domain_review
+- qa_security_review
+- integration
+- done
+- blocked
+shared_file_owners:
+  python_node_lockfiles: integration
+  alembic_head: data_migration
+  openapi_generated_client: integration
+  ui_tokens: frontend_ux
+  compose_networks_volumes: devops
+  permission_catalog: iam
+  event_envelope: platform
+phases:
+- phase: 0
+  name: 기반 플랫폼
+  entry_gate: 승인된 설계 기준선
+  exit_gate: 인증·권한·감사·파일·알림·백업·복구가 통합 검증되고 Critical/High 결함이 없다.
+  waves:
+  - id: '0.1'
+    packages:
+    - id: WP-PLT-001
+      title: 저장소·모듈 경계 부트스트랩
+      primary_role: Platform Backend Agent
+      stream: platform
+      dependencies: []
+      owned_modules:
+      - core
+      risk: high
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/WP-PLT-001-repository-bootstrap
+      acceptance_criteria:
+      - 모든 모듈이 표준 구조를 사용한다
+      - CI에서 금지된 cross-module import를 탐지한다
+      - 개발 환경이 문서대로 재현된다
+  - id: '0.2'
+    packages:
+    - id: WP-OPS-001
+      title: Docker Compose 개발·스테이징 기반
+      primary_role: DevOps Agent
+      stream: infra
+      dependencies:
+      - WP-PLT-001
+      owned_modules:
+      - operations
+      risk: high
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/WP-OPS-001-compose-foundation
+      acceptance_criteria:
+      - PostgreSQL/Redis/MinIO와 앱이 health 상태로 기동한다
+      - 데이터 서비스 포트가 불필요하게 외부 노출되지 않는다
+      - 이미지 버전이 고정된다
+  - id: '0.3'
+    packages:
+    - id: WP-PLT-002
+      title: 인증·세션·MFA 기반
+      primary_role: Platform Backend Agent
+      stream: platform
+      dependencies:
+      - WP-PLT-001
+      - WP-OPS-001
+      owned_modules:
+      - iam
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/WP-PLT-002-auth-session-mfa
+      acceptance_criteria:
+      - 로그인/로그아웃/세션 철회가 동작한다
+      - 잠금·속도 제한이 적용된다
+      - 비활성 사용자 세션이 즉시 철회된다
+  - id: '0.4'
+    packages:
+    - id: WP-PLT-003
+      title: 회사·부서·직원·사용자 관리
+      primary_role: Platform Backend Agent
+      stream: platform
+      dependencies:
+      - WP-PLT-002
+      owned_modules:
+      - iam
+      - hr-core
+      risk: high
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/WP-PLT-003-organization-users
+      acceptance_criteria:
+      - 부서 계층과 직원 소속을 관리한다
+      - 사용자와 직원 연결/분리가 가능하다
+      - 퇴사 이력을 삭제하지 않는다
+    - id: WP-UI-001
+      title: 디자인 시스템·전역 레이아웃
+      primary_role: Frontend/UX Agent
+      stream: ux
+      dependencies:
+      - WP-PLT-001
+      - WP-PLT-002
+      owned_modules:
+      - frontend-core
+      risk: medium
+      required_reviews:
+      - domain_owner
+      - qa
+      branch: feature/WP-UI-001-design-system-shell
+      acceptance_criteria:
+      - loading/empty/error/forbidden/stale 패턴이 제공된다
+      - 키보드와 반응형 기본 검증을 통과한다
+      - 권한 기반 메뉴가 동작한다
+  - id: '0.5'
+    packages:
+    - id: WP-PLT-004
+      title: RBAC·범위 권한 엔진
+      primary_role: Platform Backend Agent
+      stream: platform
+      dependencies:
+      - WP-PLT-002
+      - WP-PLT-003
+      owned_modules:
+      - iam
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/WP-PLT-004-rbac-scope-engine
+      acceptance_criteria:
+      - object-level 권한이 API마다 적용된다
+      - 외부 사용자는 초대 프로젝트만 접근한다
+      - 권한 변경이 감사된다
+  - id: '0.6'
+    packages:
+    - id: WP-PLT-005
+      title: 감사 로그·활동 로그·Outbox
+      primary_role: Platform Backend Agent
+      stream: platform
+      dependencies:
+      - WP-PLT-004
+      owned_modules:
+      - core
+      - collab
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/WP-PLT-005-audit-outbox
+      acceptance_criteria:
+      - 중요 command가 actor/before/after/trace를 남긴다
+      - outbox 중복 소비가 방지된다
+      - 일반 앱 권한으로 감사 로그를 수정하지 못한다
+  - id: '0.7'
+    packages:
+    - id: WP-PLT-006
+      title: 파일 업로드·검사·MinIO 기반
+      primary_role: Platform Backend Agent
+      stream: platform
+      dependencies:
+      - WP-OPS-001
+      - WP-PLT-004
+      - WP-PLT-005
+      owned_modules:
+      - dms-core
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/WP-PLT-006-secure-file-storage
+      acceptance_criteria:
+      - 업로드→검사→READY 상태가 동작한다
+      - 권한 없는 다운로드가 차단된다
+      - 체크섬과 파일 크기가 검증된다
+    - id: WP-PLT-007
+      title: 댓글·멘션·알림 기반
+      primary_role: Platform Backend Agent
+      stream: platform
+      dependencies:
+      - WP-PLT-004
+      - WP-PLT-005
+      owned_modules:
+      - collab
+      risk: high
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/WP-PLT-007-collaboration-notifications
+      acceptance_criteria:
+      - 댓글/답글/멘션이 권한 범위를 따른다
+      - 알림 중복 억제와 읽음 상태가 동작한다
+      - 이메일 실패가 인앱 알림을 막지 않는다
+  - id: '0.8'
+    packages:
+    - id: WP-OPS-002
+      title: 관측성·백업 최소구성
+      primary_role: DevOps Agent
+      stream: infra
+      dependencies:
+      - WP-OPS-001
+      - WP-PLT-005
+      - WP-PLT-006
+      owned_modules:
+      - operations
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/WP-OPS-002-observability-backup
+      acceptance_criteria:
+      - 핵심 서비스 상태가 보인다
+      - 백업 실패 경보가 발생한다
+      - 샘플 복원과 파일 체크섬 검증이 완료된다
+  - id: '0.9'
+    packages:
+    - id: WP-QA-000
+      title: Phase 0 보안·복구 게이트
+      primary_role: QA·Security Agent
+      stream: qa
+      dependencies:
+      - WP-PLT-002
+      - WP-PLT-003
+      - WP-PLT-004
+      - WP-PLT-005
+      - WP-PLT-006
+      - WP-PLT-007
+      - WP-UI-001
+      - WP-OPS-002
+      owned_modules:
+      - qa
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: test/WP-QA-000-foundation-gate
+      acceptance_criteria:
+      - IDOR/세션/악성 업로드 테스트를 통과한다
+      - 신규 환경 복원이 가능하다
+      - Critical/High 결함이 없다
+- phase: 1
+  name: 프로젝트 운영 코어
+  entry_gate: Phase 0 QA 게이트 통과
+  exit_gate: 프로젝트 파일럿 사용자가 프로젝트·업무·회의·문서·산출물·일반결재를 한 흐름으로 수행한다.
+  waves:
+  - id: '1.1'
+    packages:
+    - id: WP-APR-001
+      title: 일반 전자결재
+      primary_role: Operations Domain Agent
+      stream: operations
+      dependencies:
+      - WP-PLT-003
+      - WP-PLT-004
+      - WP-PLT-005
+      - WP-PLT-007
+      owned_modules:
+      - workflow
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-apr-001
+      acceptance_criteria:
+      - 승인 단계와 대결을 추적한다
+      - 자기승인 제한이 가능하다
+      - 완료 스냅샷과 감사가 남는다
+    - id: WP-PRJ-001
+      title: 프로젝트·멤버·상태
+      primary_role: Project Domain Agent
+      stream: project
+      dependencies:
+      - WP-QA-000
+      owned_modules:
+      - project
+      risk: high
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-prj-001
+      acceptance_criteria:
+      - 프로젝트 코드가 중복되지 않는다
+      - 프로젝트 범위 권한이 적용된다
+      - 상태 전이가 감사된다
+  - id: '1.2'
+    packages:
+    - id: WP-CAL-001
+      title: 캘린더·회의·회의록 수동 기능
+      primary_role: Project Domain Agent
+      stream: project
+      dependencies:
+      - WP-PRJ-001
+      - WP-PLT-007
+      owned_modules:
+      - calendar
+      - meeting
+      risk: medium
+      required_reviews:
+      - domain_owner
+      - qa
+      branch: feature/wp-cal-001
+      acceptance_criteria:
+      - 회의와 프로젝트가 연결된다
+      - 참석/안건/결정/액션을 기록한다
+      - 액션을 수동 업무로 전환한다
+    - id: WP-DMS-001
+      title: 문서·폴더·불변 버전
+      primary_role: DMS Agent
+      stream: document
+      dependencies:
+      - WP-PLT-006
+      - WP-PRJ-001
+      owned_modules:
+      - dms
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-dms-001
+      acceptance_criteria:
+      - 문서 버전은 수정되지 않는다
+      - 최신/승인/제출 버전 포인터가 분리된다
+      - 프로젝트 권한이 폴더/문서에 상속된다
+    - id: WP-PRJ-002
+      title: 프로젝트 템플릿·마일스톤
+      primary_role: Project Domain Agent
+      stream: project
+      dependencies:
+      - WP-PRJ-001
+      owned_modules:
+      - project
+      risk: high
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-prj-002
+      acceptance_criteria:
+      - 템플릿 버전이 불변이다
+      - 적용 전 생성 항목을 미리 본다
+      - 실패한 하위 작업을 재시도할 수 있다
+    - id: WP-PRJ-003
+      title: 업무·하위업무·의존성
+      primary_role: Project Domain Agent
+      stream: project
+      dependencies:
+      - WP-PRJ-001
+      - WP-UI-001
+      owned_modules:
+      - project
+      risk: high
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-prj-003
+      acceptance_criteria:
+      - 순환 의존성을 차단한다
+      - 동시 수정 충돌을 처리한다
+      - 다른 프로젝트 업무 접근을 차단한다
+    - id: WP-PRJ-004
+      title: 리스크·이슈·의사결정
+      primary_role: Project Domain Agent
+      stream: project
+      dependencies:
+      - WP-PRJ-001
+      - WP-PLT-007
+      owned_modules:
+      - project
+      risk: medium
+      required_reviews:
+      - domain_owner
+      - qa
+      branch: feature/wp-prj-004
+      acceptance_criteria:
+      - 리스크와 이슈 상태가 구분된다
+      - 결정 대체 관계를 보존한다
+      - 고위험 리스크 알림이 동작한다
+  - id: '1.3'
+    packages:
+    - id: WP-DMS-002
+      title: 산출물·검토·제출
+      primary_role: DMS Agent
+      stream: document
+      dependencies:
+      - WP-DMS-001
+      - WP-PRJ-002
+      owned_modules:
+      - dms
+      - project
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-dms-002
+      acceptance_criteria:
+      - 필수 산출물 상태를 추적한다
+      - 승인/제출본을 잠근다
+      - 면제에는 결재 근거가 필요하다
+  - id: '1.4'
+    packages:
+    - id: WP-UI-PRJ-001
+      title: 프로젝트 통합 홈·받은 작업함
+      primary_role: Frontend/UX Agent
+      stream: ux
+      dependencies:
+      - WP-PRJ-002
+      - WP-PRJ-003
+      - WP-PRJ-004
+      - WP-CAL-001
+      - WP-DMS-002
+      - WP-APR-001
+      owned_modules:
+      - frontend-project
+      risk: medium
+      required_reviews:
+      - domain_owner
+      - qa
+      branch: feature/wp-ui-prj-001
+      acceptance_criteria:
+      - 경고에서 원본으로 드릴다운한다
+      - PM과 직원 역할별로 필요한 정보가 보인다
+      - 부분 실패가 전체 화면을 막지 않는다
+  - id: '1.5'
+    packages:
+    - id: WP-QA-P1
+      title: Phase 1 프로젝트 파일럿 게이트
+      primary_role: QA·Security Agent
+      stream: qa
+      dependencies:
+      - WP-UI-PRJ-001
+      owned_modules:
+      - qa
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-qa-p1
+      acceptance_criteria:
+      - 템플릿→업무→회의→산출물→결재 흐름이 통과한다
+      - 외부 사용자의 범위 격리가 확인된다
+      - 파일럿 사용자 승인 기록이 있다
+- phase: 2
+  name: CRM·영업·견적·계약
+  entry_gate: Phase 1 QA 게이트 통과
+  exit_gate: 고객 등록부터 수주·계약·프로젝트 전환까지 E2E가 통과하고 계약 원본과 버전 이력이 보존된다.
+  waves:
+  - id: '2.1'
+    packages:
+    - id: WP-CRM-001
+      title: 고객사·담당자
+      primary_role: Commercial Domain Agent
+      stream: commercial
+      dependencies:
+      - WP-QA-000
+      owned_modules:
+      - crm
+      risk: high
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-crm-001
+      acceptance_criteria:
+      - 사업자번호/도메인 중복 경고가 동작한다
+      - 고객 접근 권한과 민감 메모가 분리된다
+      - 프로젝트/계약 링크가 제공된다
+  - id: '2.2'
+    packages:
+    - id: WP-CRM-002
+      title: 리드·영업활동
+      primary_role: Commercial Domain Agent
+      stream: commercial
+      dependencies:
+      - WP-CRM-001
+      - WP-CAL-001
+      owned_modules:
+      - crm
+      risk: medium
+      required_reviews:
+      - domain_owner
+      - qa
+      branch: feature/wp-crm-002
+      acceptance_criteria:
+      - 전환 결과가 고객/담당자/기회와 연결된다
+      - 중복 전환을 방지한다
+      - 후속 활동이 일정/알림과 연결된다
+    - id: WP-SAL-001
+      title: 영업기회·파이프라인
+      primary_role: Commercial Domain Agent
+      stream: commercial
+      dependencies:
+      - WP-CRM-001
+      owned_modules:
+      - sales
+      risk: high
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-sal-001
+      acceptance_criteria:
+      - 단계 변경 이력이 남는다
+      - 수주 조건을 검증한다
+      - 가중 파이프라인 근거를 추적한다
+  - id: '2.3'
+    packages:
+    - id: WP-SAL-002
+      title: 품목 카탈로그·견적 버전
+      primary_role: Commercial Domain Agent
+      stream: commercial
+      dependencies:
+      - WP-SAL-001
+      - WP-APR-001
+      - WP-DMS-001
+      owned_modules:
+      - sales
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-sal-002
+      acceptance_criteria:
+      - 공급가/세액/합계 계산이 정확하다
+      - 발송 견적은 새 버전으로만 수정한다
+      - 원가/마진 권한이 분리된다
+  - id: '2.4'
+    packages:
+    - id: WP-CON-001
+      title: 계약·버전·보안등급
+      primary_role: Commercial Domain Agent
+      stream: commercial
+      dependencies:
+      - WP-CRM-001
+      - WP-SAL-002
+      - WP-APR-001
+      - WP-DMS-001
+      owned_modules:
+      - contract
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-con-001
+      acceptance_criteria:
+      - ACTIVE 조건이 검증된다
+      - 계약 변경 이력이 보존된다
+      - 민감 문서 접근과 다운로드가 감사된다
+  - id: '2.5'
+    packages:
+    - id: WP-AUT-001
+      title: 수주·계약→프로젝트 전환
+      primary_role: Commercial Domain Agent
+      stream: commercial
+      dependencies:
+      - WP-SAL-001
+      - WP-CON-001
+      - WP-PRJ-002
+      owned_modules:
+      - sales
+      - contract
+      - project
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-aut-001
+      acceptance_criteria:
+      - 고객/계약/PM/기간을 미리 보여준다
+      - 부분 실패를 재시도한다
+      - 동일 계약 프로젝트 중복을 방지한다
+    - id: WP-CON-002
+      title: 계약 의무·지급 일정·갱신
+      primary_role: Commercial Domain Agent
+      stream: commercial
+      dependencies:
+      - WP-CON-001
+      - WP-DMS-002
+      owned_modules:
+      - contract
+      risk: high
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-con-002
+      acceptance_criteria:
+      - 의무와 프로젝트 산출물을 연결한다
+      - 갱신 90/60/30/7일 알림이 중복 없이 생성된다
+      - 지급계획과 실제 매출을 구분한다
+  - id: '2.6'
+    packages:
+    - id: WP-UI-COM-001
+      title: 영업·계약 통합 UX
+      primary_role: Frontend/UX Agent
+      stream: ux
+      dependencies:
+      - WP-CRM-002
+      - WP-SAL-002
+      - WP-CON-002
+      - WP-AUT-001
+      owned_modules:
+      - frontend-commercial
+      risk: medium
+      required_reviews:
+      - domain_owner
+      - qa
+      branch: feature/wp-ui-com-001
+      acceptance_criteria:
+      - 금액 변경 전후 비교가 보인다
+      - 갱신/수주에서 다음 행동이 명확하다
+      - 모바일은 조회/간단 활동이 가능하다
+  - id: '2.7'
+    packages:
+    - id: WP-QA-P2
+      title: Phase 2 수주 여정 게이트
+      primary_role: QA·Security Agent
+      stream: qa
+      dependencies:
+      - WP-UI-COM-001
+      owned_modules:
+      - qa
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-qa-p2
+      acceptance_criteria:
+      - 견적 버전/계산/결재가 통과한다
+      - 계약 문서 권한 누출이 없다
+      - 중복 프로젝트 전환이 없다
+- phase: 3
+  name: 결재·구매·재무·자산
+  entry_gate: Phase 2 QA 게이트 통과
+  exit_gate: 구매요청부터 입고·자산/재고 반영, 비용·손익 집계까지 수치 검증이 통과한다.
+  waves:
+  - id: '3.1'
+    packages:
+    - id: WP-APR-002
+      title: 조건부 결재·대결·SLA
+      primary_role: Operations Domain Agent
+      stream: operations
+      dependencies:
+      - WP-APR-001
+      - WP-QA-P2
+      owned_modules:
+      - workflow
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-apr-002
+      acceptance_criteria:
+      - 금액 한도별 결재선이 정확하다
+      - 승인 payload가 변경되지 않는다
+      - 기한 경과와 대결 이력이 남는다
+  - id: '3.2'
+    packages:
+    - id: WP-FIN-001
+      title: 비용·증빙·예산
+      primary_role: Operations Domain Agent
+      stream: operations
+      dependencies:
+      - WP-APR-002
+      - WP-DMS-001
+      - WP-PRJ-001
+      owned_modules:
+      - finance
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-fin-001
+      acceptance_criteria:
+      - 배부 합계가 원금액과 일치한다
+      - 예산 초과 정책이 적용된다
+      - 증빙 중복 후보를 표시한다
+    - id: WP-PUR-001
+      title: 공급사·구매요청·견적비교
+      primary_role: Operations Domain Agent
+      stream: operations
+      dependencies:
+      - WP-APR-002
+      - WP-CRM-001
+      owned_modules:
+      - procurement
+      risk: high
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-pur-001
+      acceptance_criteria:
+      - 승인 전 발주가 불가하다
+      - 요청 금액 변경 시 재결재한다
+      - 공급사 민감정보 접근이 제한된다
+  - id: '3.3'
+    packages:
+    - id: WP-PUR-002
+      title: 발주·부분입고·검수·반품
+      primary_role: Operations Domain Agent
+      stream: operations
+      dependencies:
+      - WP-PUR-001
+      - WP-DMS-001
+      owned_modules:
+      - procurement
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-pur-002
+      acceptance_criteria:
+      - 부분 입고 수량이 정확하다
+      - 발주 초과 입고를 통제한다
+      - 입고/반품 이력이 불변으로 남는다
+  - id: '3.4'
+    packages:
+    - id: WP-AST-001
+      title: 자산·대여·점검·폐기
+      primary_role: Operations Domain Agent
+      stream: operations
+      dependencies:
+      - WP-PUR-002
+      - WP-APR-002
+      - WP-PLT-003
+      owned_modules:
+      - asset
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-ast-001
+      acceptance_criteria:
+      - 자산 상태 전이가 검증된다
+      - 보유자/위치 변경 이력이 남는다
+      - 폐기에는 승인 근거가 필요하다
+    - id: WP-FIN-002
+      title: 매출·수금·매입·지급 상태
+      primary_role: Operations Domain Agent
+      stream: operations
+      dependencies:
+      - WP-CON-002
+      - WP-FIN-001
+      - WP-PUR-002
+      owned_modules:
+      - finance
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-fin-002
+      acceptance_criteria:
+      - 계획과 실제를 구분한다
+      - 부분 수금이 정확하다
+      - 취소/정정 이력을 삭제하지 않는다
+    - id: WP-INV-001
+      title: 소모품 재고 원장
+      primary_role: Operations Domain Agent
+      stream: operations
+      dependencies:
+      - WP-PUR-002
+      owned_modules:
+      - inventory
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-inv-001
+      acceptance_criteria:
+      - 음수 재고를 방지한다
+      - 조정 사유와 승인이 남는다
+      - 원장과 잔액 재계산이 일치한다
+  - id: '3.5'
+    packages:
+    - id: WP-AUT-002
+      title: 입고→자산/재고 반영
+      primary_role: Operations Domain Agent
+      stream: operations
+      dependencies:
+      - WP-PUR-002
+      - WP-AST-001
+      - WP-INV-001
+      owned_modules:
+      - procurement
+      - asset
+      - inventory
+      risk: high
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-aut-002
+      acceptance_criteria:
+      - 동일 입고의 중복 자산이 없다
+      - 시리얼 미입력 항목을 명확히 표시한다
+      - 부분 실패를 재처리한다
+    - id: WP-FIN-003
+      title: 프로젝트 손익·스냅샷
+      primary_role: Operations Domain Agent
+      stream: operations
+      dependencies:
+      - WP-FIN-001
+      - WP-FIN-002
+      owned_modules:
+      - finance
+      - analytics
+      risk: high
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-fin-003
+      acceptance_criteria:
+      - 모든 수치가 원장으로 드릴다운된다
+      - 예상/확정 손익이 구분된다
+      - 기준일과 포함 범위가 표시된다
+    - id: WP-INT-ACC-001
+      title: 외부 회계 내보내기
+      primary_role: Integration Agent
+      stream: integration
+      dependencies:
+      - WP-FIN-002
+      owned_modules:
+      - integration
+      - finance
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-int-acc-001
+      acceptance_criteria:
+      - 내보낸 항목을 중복 전송하지 않는다
+      - 오류 항목을 재처리한다
+      - 외부 ID와 상태를 추적한다
+  - id: '3.6'
+    packages:
+    - id: WP-QA-P3
+      title: Phase 3 운영·재무 게이트
+      primary_role: QA·Security Agent
+      stream: qa
+      dependencies:
+      - WP-FIN-003
+      - WP-AUT-002
+      - WP-INT-ACC-001
+      owned_modules:
+      - qa
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-qa-p3
+      acceptance_criteria:
+      - 금액/수량 원장이 일치한다
+      - 프로젝트 손익을 원본으로 추적한다
+      - 승인/권한 우회가 없다
+- phase: 4
+  name: 인사·근태·휴가
+  entry_gate: Phase 3 QA 게이트 통과
+  exit_gate: 직원·근태·휴가·퇴사 인계 흐름이 개인정보 권한과 감사 기준을 충족한다.
+  waves:
+  - id: '4.1'
+    packages:
+    - id: WP-HR-001
+      title: 인사 프로필·기술·자격
+      primary_role: People/HR Domain Agent
+      stream: people
+      dependencies:
+      - WP-PLT-003
+      - WP-QA-P3
+      owned_modules:
+      - hr
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-hr-001
+      acceptance_criteria:
+      - 민감 필드가 분리/마스킹된다
+      - 자격 만료 알림이 가능하다
+      - 프로젝트 이력과 연결된다
+  - id: '4.2'
+    packages:
+    - id: WP-AUT-003
+      title: 퇴사·인계·회수 워크플로우
+      primary_role: People/HR Domain Agent
+      stream: people
+      dependencies:
+      - WP-HR-001
+      - WP-AST-001
+      - WP-PLT-002
+      - WP-PRJ-003
+      owned_modules:
+      - hr
+      - iam
+      - asset
+      - project
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-aut-003
+      acceptance_criteria:
+      - 세션/토큰이 즉시 철회된다
+      - 자산과 미완료 업무가 누락 없이 표시된다
+      - 작성 이력은 보존된다
+    - id: WP-HR-002
+      title: 근태·수정 신청
+      primary_role: People/HR Domain Agent
+      stream: people
+      dependencies:
+      - WP-HR-001
+      - WP-APR-002
+      owned_modules:
+      - hr
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-hr-002
+      acceptance_criteria:
+      - 원 기록과 수정 이력이 남는다
+      - 권한 없는 타인 근태 조회가 차단된다
+      - 시간대/공휴일 기준이 일관된다
+    - id: WP-HR-003
+      title: 휴가 부여·잔여·신청
+      primary_role: People/HR Domain Agent
+      stream: people
+      dependencies:
+      - WP-HR-001
+      - WP-CAL-001
+      - WP-APR-002
+      owned_modules:
+      - hr
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-hr-003
+      acceptance_criteria:
+      - 잔액 동시 차감이 안전하다
+      - 반일/시간 단위를 처리한다
+      - 승인/취소 후 잔액이 일치한다
+    - id: WP-HR-004
+      title: 교육·평가 기초
+      primary_role: People/HR Domain Agent
+      stream: people
+      dependencies:
+      - WP-HR-001
+      owned_modules:
+      - hr
+      risk: high
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-hr-004
+      acceptance_criteria:
+      - 평가 접근이 역할과 대상에 제한된다
+      - 버전/제출 이력이 남는다
+      - 교육 증빙이 문서와 연결된다
+  - id: '4.3'
+    packages:
+    - id: WP-QA-P4
+      title: Phase 4 인사 개인정보 게이트
+      primary_role: QA·Security Agent
+      stream: qa
+      dependencies:
+      - WP-HR-002
+      - WP-HR-003
+      - WP-HR-004
+      - WP-AUT-003
+      owned_modules:
+      - qa
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-qa-p4
+      acceptance_criteria:
+      - 타인 민감정보 노출이 없다
+      - 휴가 잔액 경쟁조건을 통과한다
+      - 퇴사 후 접근이 차단된다
+- phase: 5
+  name: 검색·지식·AI 읽기 기능
+  entry_gate: Phase 4 QA 게이트 통과
+  exit_gate: 검색/RAG가 원본 권한을 이중 검증하고 근거 링크를 제공하며 권한 누출 테스트를 통과한다.
+  waves:
+  - id: '5.1'
+    packages:
+    - id: WP-SRCH-001
+      title: 통합 키워드 검색·색인
+      primary_role: AI·Search Agent
+      stream: ai_search
+      dependencies:
+      - WP-QA-P1
+      - WP-DMS-001
+      - WP-PLT-005
+      owned_modules:
+      - search
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-srch-001
+      acceptance_criteria:
+      - DB 변경이 증분 색인된다
+      - 검색 결과를 원본 권한으로 재검증한다
+      - 색인 실패를 재처리한다
+  - id: '5.2'
+    packages:
+    - id: WP-KMS-001
+      title: 위키·지식 수명주기
+      primary_role: AI·Search Agent
+      stream: ai_search
+      dependencies:
+      - WP-DMS-001
+      - WP-SRCH-001
+      owned_modules:
+      - knowledge
+      risk: high
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-kms-001
+      acceptance_criteria:
+      - 게시/폐기/대체 상태가 추적된다
+      - 오래된 지식이 표시된다
+      - RAG 포함 여부를 통제한다
+  - id: '5.3'
+    packages:
+    - id: WP-RAG-001
+      title: 문서 추출·청크·임베딩 파이프라인
+      primary_role: AI·Search Agent
+      stream: ai_search
+      dependencies:
+      - WP-SRCH-001
+      - WP-KMS-001
+      owned_modules:
+      - rag
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-rag-001
+      acceptance_criteria:
+      - 원문 위치와 버전이 보존된다
+      - 구버전 벡터가 비활성화된다
+      - 악성/실행 파일이 인덱싱되지 않는다
+  - id: '5.4'
+    packages:
+    - id: WP-RAG-002
+      title: 권한 기반 하이브리드 검색
+      primary_role: AI·Search Agent
+      stream: ai_search
+      dependencies:
+      - WP-RAG-001
+      - WP-PLT-004
+      owned_modules:
+      - rag
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-rag-002
+      acceptance_criteria:
+      - 다른 프로젝트 자료가 노출되지 않는다
+      - 최신 승인본이 우선된다
+      - 인용 링크가 원문 위치로 이동한다
+  - id: '5.5'
+    packages:
+    - id: WP-AI-001
+      title: AI Gateway·대화·모델 정책
+      primary_role: AI·Search Agent
+      stream: ai_search
+      dependencies:
+      - WP-RAG-002
+      - WP-OPS-002
+      owned_modules:
+      - ai
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-ai-001
+      acceptance_criteria:
+      - 민감도에 따른 모델 정책이 적용된다
+      - 대화 보존/삭제 정책이 동작한다
+      - AI 장애가 ERP CRUD를 막지 않는다
+  - id: '5.6'
+    packages:
+    - id: WP-AI-002
+      title: 프로젝트·문서·보고서 요약
+      primary_role: AI·Search Agent
+      stream: ai_search
+      dependencies:
+      - WP-AI-001
+      - WP-FIN-003
+      owned_modules:
+      - ai
+      risk: high
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-ai-002
+      acceptance_criteria:
+      - 사실/추론/제안이 구분된다
+      - 수치와 문장에 근거가 연결된다
+      - 초안이 공식 문서를 자동 덮어쓰지 않는다
+    - id: WP-AI-003
+      title: 회의 액션아이템 제안
+      primary_role: AI·Search Agent
+      stream: ai_search
+      dependencies:
+      - WP-AI-001
+      - WP-CAL-001
+      - WP-PRJ-003
+      owned_modules:
+      - ai
+      - meeting
+      risk: high
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-ai-003
+      acceptance_criteria:
+      - 근거 위치가 표시된다
+      - 명시되지 않은 담당/기한은 추천으로 구분된다
+      - 검토 전 업무가 생성되지 않는다
+    - id: WP-AI-004
+      title: 산출물 누락·버전 점검
+      primary_role: AI·Search Agent
+      stream: ai_search
+      dependencies:
+      - WP-AI-001
+      - WP-DMS-002
+      - WP-CON-002
+      owned_modules:
+      - ai
+      - dms
+      risk: high
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-ai-004
+      acceptance_criteria:
+      - 누락/미승인/제출 불일치를 분류한다
+      - 예외 승인 산출물을 오탐하지 않는다
+      - 결과가 원본 링크를 포함한다
+  - id: '5.7'
+    packages:
+    - id: WP-AI-QA-001
+      title: RAG·AI 읽기 보안 게이트
+      primary_role: QA·Security Agent
+      stream: qa
+      dependencies:
+      - WP-AI-002
+      - WP-AI-003
+      - WP-AI-004
+      owned_modules:
+      - qa
+      - ai
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-ai-qa-001
+      acceptance_criteria:
+      - 권한 누출 0건
+      - 최신 버전/인용 회귀를 통과한다
+      - 모델/프롬프트 버전별 결과가 추적된다
+- phase: 6
+  name: 승인형 AI 업무 실행
+  entry_gate: Phase 5 QA 게이트 통과
+  exit_gate: AI 도구가 위험등급·미리보기·승인·멱등성·킬스위치를 준수하고 안전 게이트를 통과한다.
+  waves:
+  - id: '6.1'
+    packages:
+    - id: WP-AIT-001
+      title: Tool Registry·스키마·정책 엔진
+      primary_role: AI Tooling Agent
+      stream: ai_tools
+      dependencies:
+      - WP-AI-QA-001
+      - WP-PLT-004
+      owned_modules:
+      - ai-tools
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-ait-001
+      acceptance_criteria:
+      - 범용 SQL/셸 도구가 없다
+      - 모든 도구에 permission/risk/idempotency가 있다
+      - 도구를 즉시 비활성화할 수 있다
+  - id: '6.2'
+    packages:
+    - id: WP-AIO-001
+      title: AI 관측성·비용·킬스위치
+      primary_role: AI Tooling Agent
+      stream: ai_tools
+      dependencies:
+      - WP-AIT-001
+      - WP-AI-001
+      owned_modules:
+      - ai-ops
+      risk: high
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-aio-001
+      acceptance_criteria:
+      - 실행별 trace를 재구성할 수 있다
+      - 모델/도구를 즉시 중지한다
+      - 민감 원문이 운영 로그에 과다 노출되지 않는다
+    - id: WP-AIT-002
+      title: AI 승인 요청·고정 payload·재개
+      primary_role: AI Tooling Agent
+      stream: ai_tools
+      dependencies:
+      - WP-AIT-001
+      - WP-APR-002
+      owned_modules:
+      - ai-tools
+      - workflow
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-ait-002
+      acceptance_criteria:
+      - 승인 전 실행이 불가하다
+      - 승인 후 payload 변조가 차단된다
+      - 만료/거절/취소가 추적된다
+  - id: '6.3'
+    packages:
+    - id: WP-AIA-001
+      title: 업무·리스크·검토요청 쓰기 도구
+      primary_role: AI Tooling Agent
+      stream: ai_tools
+      dependencies:
+      - WP-AIT-002
+      - WP-PRJ-004
+      - WP-DMS-002
+      owned_modules:
+      - ai-tools
+      - project
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-aia-001
+      acceptance_criteria:
+      - 미리보기와 실제 결과가 일치한다
+      - 재시도해도 중복이 없다
+      - 결과 엔터티 링크가 반환된다
+  - id: '6.4'
+    packages:
+    - id: WP-AIA-002
+      title: 교차 모듈 승인형 자동화
+      primary_role: AI Tooling Agent
+      stream: ai_tools
+      dependencies:
+      - WP-AIA-001
+      - WP-AUT-001
+      - WP-AUT-002
+      owned_modules:
+      - ai-tools
+      - automation
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-aia-002
+      acceptance_criteria:
+      - 부분 실패를 숨기지 않는다
+      - 각 단계의 권한과 감사가 적용된다
+      - 동일 원본 재실행 중복이 없다
+  - id: '6.5'
+    packages:
+    - id: WP-AI-QA-002
+      title: AI 도구 안전 게이트
+      primary_role: QA·Security Agent
+      stream: qa
+      dependencies:
+      - WP-AIT-002
+      - WP-AIA-002
+      - WP-AIO-001
+      owned_modules:
+      - qa
+      - ai
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-ai-qa-002
+      acceptance_criteria:
+      - R4 실행 승인 우회 0건
+      - idempotency 회귀 통과
+      - 도구 장애 시 부분 결과가 명확하다
+- phase: 7
+  name: 외부 연동·분석·인프라 고도화
+  entry_gate: Phase 6 QA 게이트 통과
+  exit_gate: 필수 외부 연동·KPI·서버 상태·재해복구가 전사 릴리스 게이트를 통과한다.
+  waves:
+  - id: '7.1'
+    packages:
+    - id: WP-ANL-001
+      title: 표준 KPI·리포트
+      primary_role: Analytics Agent
+      stream: analytics
+      dependencies:
+      - WP-FIN-003
+      - WP-SAL-001
+      - WP-PRJ-003
+      owned_modules:
+      - analytics
+      risk: high
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-anl-001
+      acceptance_criteria:
+      - 모든 KPI 정의가 문서화된다
+      - 집계 수치가 원본과 일치한다
+      - 기준일/필터가 표시된다
+    - id: WP-INF-001
+      title: 서버·서비스·GPU 상태 연동
+      primary_role: Infrastructure Integration Agent
+      stream: infra_integration
+      dependencies:
+      - WP-OPS-002
+      - WP-AST-001
+      owned_modules:
+      - infra
+      risk: high
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-inf-001
+      acceptance_criteria:
+      - 원시 시계열은 모니터링 시스템에 남는다
+      - 중복 경보가 묶인다
+      - 소유자와 runbook이 표시된다
+    - id: WP-INT-CAL-001
+      title: 외부 캘린더 동기화
+      primary_role: Integration Agent
+      stream: integration
+      dependencies:
+      - WP-CAL-001
+      owned_modules:
+      - calendar-integration
+      risk: high
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-int-cal-001
+      acceptance_criteria:
+      - external ID/version을 추적한다
+      - 충돌을 자동 덮어쓰지 않는다
+      - 외부 장애가 ERP 일정을 막지 않는다
+    - id: WP-INT-GIT-001
+      title: GitHub/GitLab 메타데이터 연동
+      primary_role: Integration Agent
+      stream: integration
+      dependencies:
+      - WP-QA-P1
+      - WP-PLT-005
+      owned_modules:
+      - devops-integration
+      risk: high
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-int-git-001
+      acceptance_criteria:
+      - 웹훅 중복이 처리되지 않는다
+      - 소스코드 원문을 불필요하게 복제하지 않는다
+      - 연동 실패를 재처리한다
+    - id: WP-INT-MAIL-001
+      title: 이메일 발송·활동 연결
+      primary_role: Integration Agent
+      stream: integration
+      dependencies:
+      - WP-CRM-002
+      - WP-SAL-002
+      - WP-PLT-007
+      owned_modules:
+      - email-integration
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-int-mail-001
+      acceptance_criteria:
+      - 외부 발송에 승인/미리보기가 적용된다
+      - 스테이징 발송이 안전 처리된다
+      - 중복 메시지가 방지된다
+  - id: '7.2'
+    packages:
+    - id: WP-ANL-002
+      title: 정기 보고서 생성·배포
+      primary_role: Analytics Agent
+      stream: analytics
+      dependencies:
+      - WP-ANL-001
+      - WP-INT-MAIL-001
+      - WP-AI-002
+      owned_modules:
+      - analytics
+      risk: high
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-anl-002
+      acceptance_criteria:
+      - 실패한 생성/발송을 재시도한다
+      - AI 서술과 공식 수치를 구분한다
+      - 발송 이력과 결과 파일을 보존한다
+    - id: WP-INF-002
+      title: 장애·포스트모템
+      primary_role: Infrastructure Integration Agent
+      stream: infra_integration
+      dependencies:
+      - WP-INF-001
+      - WP-PRJ-004
+      owned_modules:
+      - infra
+      risk: high
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-inf-002
+      acceptance_criteria:
+      - SEV 상태와 타임라인이 보존된다
+      - 장애와 프로젝트/자산/배포가 연결된다
+      - 재발 방지 업무를 생성한다
+    - id: WP-OPS-HA-001
+      title: 확장·고가용성 재평가
+      primary_role: DevOps Agent
+      stream: infra
+      dependencies:
+      - WP-INF-001
+      - WP-ANL-001
+      owned_modules:
+      - operations
+      risk: medium
+      required_reviews:
+      - domain_owner
+      - qa
+      branch: feature/wp-ops-ha-001
+      acceptance_criteria:
+      - 실제 부하/장애 데이터를 근거로 한다
+      - 불필요한 k3s 전환을 하지 않는다
+      - 비용·운영인력·RTO를 비교한다
+  - id: '7.3'
+    packages:
+    - id: WP-QA-FINAL
+      title: 전사 릴리스·재해복구 게이트
+      primary_role: QA·Security Agent
+      stream: qa
+      dependencies:
+      - WP-AI-QA-002
+      - WP-INT-GIT-001
+      - WP-INT-CAL-001
+      - WP-INT-MAIL-001
+      - WP-INF-002
+      - WP-ANL-002
+      - WP-OPS-HA-001
+      owned_modules:
+      - qa
+      - operations
+      risk: critical
+      required_reviews:
+      - architecture
+      - qa_security
+      branch: feature/wp-qa-final
+      acceptance_criteria:
+      - Critical/High 결함이 없다
+      - 복구 목표를 충족하거나 차이를 승인했다
+      - 운영자/사용자 문서와 책임자가 확정된다

@@ -5,7 +5,8 @@
 - Stream: `platform`
 - 주 담당 역할: Platform Backend Agent
 - 위험도: `high`
-- 상태: `in_progress`
+- 상태: `done`
+- Completion Report: `docs/work-packages/WP-PLT-001-completion.md`
 - 선행 작업: 없음
 
 ## 목표
@@ -55,14 +56,14 @@ Risks and Assumptions: current Git root is the workspace root; external dependen
 
 ## 완료 증거
 
-- [ ] 구현 commit/MR
-- [ ] 테스트 명령과 결과
-- [ ] migration 및 forward-fix/rollback 설명
-- [ ] API·이벤트·권한 문서
-- [ ] 보안·개인정보 검토
-- [ ] 운영·사용자 문서
-- [ ] 독립 리뷰
-- [ ] 기본 브랜치 통합 CI
+- [x] 구현 commit/MR
+- [x] 테스트 명령과 결과
+- [x] migration 및 forward-fix/rollback 설명 (해당 없음; 스키마 없음)
+- [x] API·이벤트·권한 문서
+- [x] 보안·개인정보 검토
+- [x] 운영·사용자 문서
+- [x] 독립 리뷰
+- [x] 기본 브랜치 통합 CI
 
 
 Phase 0 상세 절차는 `15_PHASE_0_FOUNDATION_IMPLEMENTATION_PLAN.md`의 `WP-PLT-001` 절을 따른다.
