@@ -5,12 +5,13 @@ description = "Luminode ERP Platform foundation"
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "fastapi==0.116.1",
+  # 실제 깃허브 어댑터가 REST API를 호출한다. WP-PKD-031.
+  "httpx==0.28.1",
   "uvicorn[standard]==0.35.0",
 ]
 
 [dependency-groups]
 dev = [
-  "httpx==0.28.1",
   "mypy==1.17.1",
   "pytest==9.0.2",
   "ruff==0.12.9",

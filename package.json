@@ -5,6 +5,7 @@
   "scripts": {
     "lint": "corepack pnpm --filter @lep/web lint",
     "typecheck": "corepack pnpm --filter @lep/web typecheck",
-    "build": "corepack pnpm --filter @lep/web build"
+    "build": "corepack pnpm --filter @lep/web build",
+    "test-unit": "corepack pnpm --filter @lep/web test"
   }
 }

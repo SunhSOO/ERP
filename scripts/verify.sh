@@ -14,4 +14,5 @@ uv run pytest apps/backend/tests -q
 python scripts/check_boundaries.py
 corepack pnpm lint
 corepack pnpm typecheck
+corepack pnpm test-unit
 corepack pnpm build

@@ -1,0 +1,53 @@
+/* 문서 변환 5단계 표시. 목업의 .step에 해당한다. */
+
+.pipeline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--color-divider);
+}
+
+.step {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 120px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+}
+
+.step + .step {
+  border-left: 1px solid var(--color-divider);
+}
+
+.stepMark {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border: 1px solid currentColor;
+  font-size: 11px;
+}
+
+.stepDone {
+  color: var(--color-success-ink);
+  background: var(--color-success-bg);
+}
+
+.stepCurrent {
+  color: var(--color-info-ink);
+  background: var(--color-info-bg);
+  font-weight: 500;
+}
+
+.stepFailed {
+  color: var(--color-danger-ink);
+  background: var(--color-danger-bg);
+}

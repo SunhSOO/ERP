@@ -6,7 +6,8 @@
     "plugins": [{ "name": "next" }],
     "paths": {
       "@lep/api-client": ["../../packages/api-client/src"],
-      "@lep/ui": ["../../packages/ui/src"]
+      "@lep/ui": ["../../packages/ui/src"],
+      "@/*": ["./*"]
     }
   },
   "include": ["next-env.d.ts", ".next/types/**/*.ts", "**/*.ts", "**/*.tsx"],

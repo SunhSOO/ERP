@@ -23,4 +23,5 @@ Invoke-Checked "backend unit tests" { uv run pytest apps/backend/tests -q }
 Invoke-Checked "module boundary check" { python scripts/check_boundaries.py }
 Invoke-Checked "frontend lint" { corepack pnpm lint }
 Invoke-Checked "frontend type check" { corepack pnpm typecheck }
+Invoke-Checked "frontend unit tests" { corepack pnpm test-unit }
 Invoke-Checked "frontend build" { corepack pnpm build }

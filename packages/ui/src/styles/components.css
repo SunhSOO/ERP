@@ -1,0 +1,518 @@
+/* 목업의 컴포넌트 클래스를 그대로 이식했다.
+ *
+ * ADR-017: 목업 CSS가 이미 완성된 디자인 시스템이므로 유틸리티로 재작성하지 않고
+ * 이 계층에 이식한다. Tailwind 유틸리티는 새 조합에만 쓴다.
+ *
+ * 파일 맨 끝의 blueprint 프레임 재정의 블록은 순서가 의미를 가진다. 위치를 옮기면
+ * 전체 인상이 달라진다. 아래 경고 주석 참조.
+ */
+
+@layer components {
+  /* ── blueprint 프레임 ──────────────────────────────────────────────────
+   * 네 모서리에 등록 표식을 그린다. 표식은 상자 바깥에 그려지므로 부모가
+   * overflow를 자르면 안 된다. 표식은 장식이라 aria-hidden으로 감춘다. */
+  .blueprint {
+    position: relative;
+    border: 1px solid var(--color-divider);
+    border-radius: 0;
+  }
+
+  .blueprint > .corner {
+    position: absolute;
+    width: 11px;
+    height: 11px;
+    color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  }
+
+  .blueprint > .corner::before,
+  .blueprint > .corner::after {
+    content: "";
+    position: absolute;
+    background: currentColor;
+  }
+
+  .blueprint > .corner::before {
+    left: 5px;
+    top: 0;
+    width: 1px;
+    height: 100%;
+  }
+
+  .blueprint > .corner::after {
+    top: 5px;
+    left: 0;
+    width: 100%;
+    height: 1px;
+  }
+
+  .blueprint > .corner.tl {
+    top: -6px;
+    left: -6px;
+  }
+  .blueprint > .corner.tr {
+    top: -6px;
+    right: -6px;
+  }
+  .blueprint > .corner.bl {
+    bottom: -6px;
+    left: -6px;
+  }
+  .blueprint > .corner.br {
+    bottom: -6px;
+    right: -6px;
+  }
+
+  /* ── 텍스트 ──────────────────────────────────────────────────────────── */
+  .text-muted {
+    /* ADR-019. 목업은 잉크 55%(3.7:1)였다. neutral-700(5.9:1)으로 올렸다. */
+    color: var(--color-text-muted);
+  }
+
+  .hr {
+    height: 1px;
+    border: 0;
+    margin: calc(var(--spacing) * 4) 0;
+    background: var(--color-divider);
+  }
+
+  /* ── 버튼 ────────────────────────────────────────────────────────────── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    text-decoration: none;
+    font-family: var(--font-heading);
+    font-weight: var(--font-weight-heading);
+    font-size: 14px;
+    line-height: 1.2;
+    color: var(--color-text);
+    background: transparent;
+    border: 1px solid transparent;
+    padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3.6);
+    border-radius: var(--radius-md);
+  }
+
+  .btn svg {
+    display: block;
+  }
+
+  .btn:disabled,
+  .btn[aria-disabled="true"] {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  /* 목업 화면에서 자주 쓰이는 작은 버튼이다. */
+  .btn-sm {
+    font-size: 12px;
+    padding: 4px 10px;
+  }
+
+  .btn-primary {
+    /* ADR-019. 목업은 --color-accent(#5980a6, 흰 글자 4.1:1)였다.
+     * accent-700(#416180, 6.5:1)으로 올렸다. */
+    background: var(--color-accent-700);
+    color: var(--color-bg);
+  }
+  .btn-primary:hover {
+    background: var(--color-accent-800);
+  }
+  .btn-primary:active {
+    background: var(--color-accent-900);
+  }
+
+  .btn-secondary {
+    border-color: var(--color-divider);
+  }
+  .btn-secondary:hover {
+    background: color-mix(in srgb, var(--color-text) 7%, transparent);
+  }
+  .btn-secondary:active {
+    background: color-mix(in srgb, var(--color-text) 14%, transparent);
+  }
+
+  .btn-ghost {
+    color: var(--color-accent-700);
+    padding-inline: calc(var(--spacing) * 1);
+  }
+  .btn-ghost:hover {
+    background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  }
+  .btn-ghost:active {
+    background: color-mix(in srgb, var(--color-accent) 18%, transparent);
+  }
+
+  .btn-icon {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+  }
+
+  .btn-block {
+    width: 100%;
+    margin-top: calc(var(--spacing) * 2);
+  }
+
+  /* ── 폼 ──────────────────────────────────────────────────────────────── */
+  .field > label {
+    display: block;
+    font-size: 12px;
+    margin-bottom: 5px;
+    color: var(--color-text-muted);
+  }
+
+  .input {
+    width: 100%;
+    min-height: 36px;
+    padding: 6px 10px;
+    font: inherit;
+    font-size: 14px;
+    color: var(--color-text);
+    caret-color: var(--color-accent);
+    background: var(--color-surface);
+    border: 1px solid var(--color-divider);
+    border-radius: var(--radius-md);
+  }
+  .input:hover {
+    border-color: color-mix(in srgb, var(--color-text) 45%, transparent);
+  }
+  .input:focus-visible {
+    border-color: var(--color-accent);
+    outline-offset: 0;
+  }
+  .input[aria-invalid="true"] {
+    border-color: var(--color-danger);
+  }
+
+  textarea.input {
+    min-height: 90px;
+    resize: vertical;
+  }
+
+  .radio {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+
+  .radio input,
+  .seg-opt input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+  }
+
+  .radio .dot {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    border-radius: 50%;
+    border: 1.5px solid var(--color-divider);
+  }
+  .radio:hover .dot {
+    border-color: var(--color-accent);
+  }
+  .radio input:checked + .dot {
+    border-color: var(--color-accent);
+    background: var(--color-accent);
+    box-shadow: inset 0 0 0 4px var(--color-bg);
+  }
+  .radio input:focus-visible + .dot {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  /* 세그먼티드 컨트롤. 발주사/용역사 전환에 쓴다.
+   * 목업에는 그룹 레이블이 없었다. Seg 컴포넌트가 fieldset과 숨김 legend를 붙인다. */
+  .seg {
+    display: inline-flex;
+    overflow: hidden;
+    border: 1px solid var(--color-divider);
+    border-radius: var(--radius-md);
+  }
+
+  .seg-opt {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .seg-opt + .seg-opt {
+    border-left: 1px solid var(--color-divider);
+  }
+  .seg-opt:has(input:checked) {
+    background: var(--color-accent-700);
+    color: var(--color-bg);
+  }
+  .seg-opt:not(:has(input:checked)):hover {
+    background: color-mix(in srgb, var(--color-text) 7%, transparent);
+  }
+  .seg-opt:has(input:focus-visible) {
+    outline: 2px solid var(--color-accent);
+    outline-offset: -2px;
+  }
+
+  /* ── 카드 ────────────────────────────────────────────────────────────── */
+  .card {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--spacing) * 2);
+    padding: calc(var(--spacing) * 3);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+  }
+
+  .card-kicker {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-accent-700);
+  }
+
+  .card-title {
+    font-family: var(--font-heading);
+    font-weight: var(--font-weight-heading);
+    font-size: 17px;
+    line-height: 1.2;
+  }
+
+  .card-body {
+    margin: 0;
+    font-size: 13px;
+    flex: 1;
+  }
+
+  .card-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--color-text-muted);
+  }
+
+  .elev-sm {
+    box-shadow: var(--shadow-sm);
+  }
+  .elev-md {
+    box-shadow: var(--shadow-md);
+  }
+  .elev-lg {
+    box-shadow: var(--shadow-lg);
+  }
+
+  /* ── 배지 ────────────────────────────────────────────────────────────
+   * 색상만으로 상태를 전달하지 않는다. StatusTag 컴포넌트가 글리프와 텍스트를
+   * 함께 내보내며 색상 전용 속성을 노출하지 않는다. */
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    letter-spacing: 0.02em;
+    padding: 3px 10px;
+    border-radius: calc(var(--radius-md) * 0.75);
+    white-space: nowrap;
+  }
+
+  .tag-accent {
+    background: var(--color-accent-100);
+    color: var(--color-accent-800);
+  }
+  .tag-accent-2 {
+    background: var(--color-accent-2-100);
+    color: var(--color-accent-2-800);
+  }
+  .tag-neutral {
+    background: var(--color-neutral-100);
+    color: var(--color-neutral-800);
+  }
+  .tag-outline {
+    border: 1px solid var(--color-accent-700);
+    color: var(--color-accent-700);
+  }
+
+  .tag-success {
+    background: var(--color-success-bg);
+    color: var(--color-success-ink);
+  }
+  .tag-warning {
+    background: var(--color-warning-bg);
+    color: var(--color-warning-ink);
+  }
+  .tag-danger {
+    background: var(--color-danger-bg);
+    color: var(--color-danger-ink);
+  }
+  .tag-info {
+    background: var(--color-info-bg);
+    color: var(--color-info-ink);
+  }
+  .tag-muted {
+    background: var(--color-muted-bg);
+    color: var(--color-muted-ink);
+  }
+  .tag-ai {
+    background: var(--color-ai-bg);
+    color: var(--color-ai-ink);
+  }
+
+  /* ── 표 ──────────────────────────────────────────────────────────────── */
+  .table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+
+  .table th {
+    text-align: left;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    padding: calc(var(--spacing) * 2);
+    border-bottom: 1px solid var(--color-divider);
+  }
+
+  .table td {
+    padding: calc(var(--spacing) * 2);
+    border-bottom: 1px solid color-mix(in srgb, var(--color-text) 8%, transparent);
+  }
+
+  .table tbody tr:hover {
+    background: color-mix(in srgb, var(--color-text) 4%, transparent);
+  }
+
+  /* ── 다이얼로그 ──────────────────────────────────────────────────────
+   * 네이티브 dialog를 쓴다. 포커스 트랩과 ESC를 플랫폼에서 얻는다. */
+  .dialog {
+    width: min(440px, 100%);
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--spacing) * 3);
+    padding: calc(var(--spacing) * 4);
+    border: 1px solid var(--color-divider);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-lg);
+    color: var(--color-text);
+  }
+
+  .dialog::backdrop {
+    background: color-mix(in srgb, #2b2b2d 50%, transparent);
+  }
+
+  .dialog-title {
+    font-family: var(--font-heading);
+    font-weight: var(--font-weight-heading);
+    font-size: 20px;
+    margin: 0;
+  }
+
+  .dialog-body {
+    font-size: 14px;
+  }
+
+  .dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: calc(var(--spacing) * 2);
+    margin-top: calc(var(--spacing) * 2);
+  }
+
+  /* ── 좌측 메뉴 ────────────────────────────────────────────────────────
+   * 잠긴 항목은 a가 아니라 span으로 렌더한다. 목업은 pointer-events:none을 건
+   * 실제 링크였는데 그것은 탭으로 도달하고 엔터로 활성화되는 접근성 결함이다. */
+  .side a,
+  .side .side-locked {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 34px;
+    padding: 0 14px;
+    color: var(--color-neutral-800);
+    text-decoration: none;
+    font-size: 13.5px;
+  }
+
+  .side a:hover {
+    background: color-mix(in srgb, var(--color-text) 5%, transparent);
+    color: var(--color-neutral-900);
+    text-decoration: none;
+  }
+
+  .side a.on,
+  .side a[aria-current="page"] {
+    color: var(--color-accent-800);
+    background: var(--color-accent-100);
+    box-shadow: inset 2px 0 0 var(--color-accent);
+    font-weight: 500;
+  }
+
+  .side .side-locked {
+    color: var(--color-text-muted);
+    cursor: not-allowed;
+  }
+
+  /* ── 스킵 링크 ────────────────────────────────────────────────────────
+   * 목업에 없던 항목이다. 06_UI_UX 13절이 키보드 접근을 요구한다. */
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    z-index: 500;
+    padding: 8px 14px;
+    background: var(--color-accent-700);
+    color: var(--color-bg);
+    font-size: 13px;
+  }
+
+  .skip-link:focus-visible {
+    left: 8px;
+    top: 8px;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   blueprint 프레임 재정의.
+
+   경고: 이 블록은 반드시 파일의 마지막이어야 한다. 컴포넌트를 와이어프레임
+   객체로 되돌리는 규칙이다. 라디우스를 0으로 만들고 카드와 다이얼로그의 배경을
+   없애 hairline 테두리만 남긴다. 위로 옮기면 앞의 규칙이 이겨서 전체 인상이
+   달라진다.
+   ══════════════════════════════════════════════════════════════════════ */
+@layer components {
+  .card,
+  .btn,
+  .input,
+  .tag,
+  .seg,
+  .dialog {
+    border-radius: 0;
+  }
+
+  .card,
+  .dialog {
+    background: transparent;
+    border: 1px solid var(--color-divider);
+  }
+
+  .btn {
+    border: 1px solid var(--color-divider);
+  }
+
+  .btn-primary {
+    border-color: var(--color-accent-700);
+  }
+
+  .btn-ghost {
+    border-color: transparent;
+  }
+}

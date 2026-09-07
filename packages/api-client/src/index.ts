@@ -6,3 +6,6 @@ export type HealthLiveResponse = Readonly<{
 export interface LepApiClient {
   getHealthLive(): Promise<HealthLiveResponse>;
 }
+
+export * from "./client";
+export * from "./domain";

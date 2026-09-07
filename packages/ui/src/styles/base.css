@@ -1,0 +1,127 @@
+/* 요소 기본 스타일. 목업의 "Industry" 기본 블록을 옮겼다.
+ * 접근성 보강분은 주석으로 표시했다. */
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    /* 목업 화면 블록의 본문 크기다. 기본 블록의 15px가 아니라 14px를 쓴다. */
+    font-size: 14px;
+    line-height: 1.55;
+    font-weight: 400;
+    font-family: var(--font-body);
+    /* 목업의 #dcdcdf는 캔버스 바탕이지 앱 배경이 아니다. 앱은 --color-bg를 쓴다. */
+    background: var(--color-bg);
+    color: var(--color-text);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-heading);
+    font-weight: var(--font-weight-heading);
+    line-height: 1.12;
+    letter-spacing: -0.015em;
+    margin: 0 0 calc(var(--spacing) * 2);
+  }
+
+  h1 {
+    font-size: 42px;
+  }
+  h2 {
+    font-size: 32px;
+  }
+  h3 {
+    font-size: 25px;
+  }
+  h4 {
+    font-size: 20px;
+  }
+  h5 {
+    font-size: 16px;
+  }
+  h6 {
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  p {
+    margin: 0 0 calc(var(--spacing) * 3);
+  }
+
+  a {
+    /* 목업 화면 블록이 기본 accent를 accent-700으로 덮어쓴다. 명암비도 이쪽이 낫다. */
+    color: var(--color-accent-700);
+    text-decoration: none;
+    text-underline-offset: 3px;
+  }
+
+  a:hover {
+    color: var(--color-accent-900);
+    text-decoration: underline;
+  }
+
+  img {
+    display: block;
+    max-width: 100%;
+  }
+
+  figure {
+    margin: 0;
+  }
+
+  figcaption {
+    font-size: 11px;
+    margin-top: calc(var(--spacing) * 1);
+    color: var(--color-text-muted);
+  }
+
+  /* 포커스 링. 목업 값을 그대로 쓴다. 키보드 사용자에게만 보인다. */
+  :focus {
+    outline: none;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--color-accent) 30%, transparent);
+  }
+
+  /* 숫자는 자릿수가 흔들리지 않게 고정폭으로. 표와 지표에서 필수다. */
+  table,
+  output,
+  time,
+  data {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* 목업에 없던 항목이다. 06_UI_UX 13절이 애니메이션 감소 설정 존중을 요구한다.
+ * 스켈레톤의 반짝임이 이 설정을 위반하기 때문에 반드시 필요하다. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

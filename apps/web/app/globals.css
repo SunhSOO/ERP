@@ -1,22 +1,23 @@
-:root {
-  color-scheme: light;
-  font-family: system-ui, sans-serif;
-  background: #f8fafc;
-  color: #0f172a;
-}
+/* 앱 전역 스타일 진입점.
+ *
+ * Tailwind 본체를 먼저 불러오고 디자인 시스템을 얹는다. 순서가 의미를 가진다.
+ * 토큰과 컴포넌트 클래스는 전부 packages/ui에 있다. 여기에는 앱 고유 규칙만 둔다.
+ */
 
-* {
-  box-sizing: border-box;
-}
+@import "tailwindcss";
+@import "@lep/ui/styles/index.css";
 
+/* Tailwind v4는 CSS 파일이 있는 프로젝트를 기준으로 클래스를 탐색한다.
+ * packages/ui는 apps/web 바깥이라 명시적으로 등록해야 한다. */
+@source "../../../packages/ui/src";
+
+/* 앱 셸이 뷰포트 전체를 쓴다. */
+html,
 body {
-  margin: 0;
+  height: 100%;
 }
 
-main {
-  min-height: 100vh;
-  display: grid;
-  place-content: center;
-  gap: 0.75rem;
-  padding: 2rem;
+#__next,
+body > div:first-child {
+  min-height: 100%;
 }
