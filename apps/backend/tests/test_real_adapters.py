@@ -7,7 +7,9 @@ shapes and the Obsidian adapter with a temporary vault on disk.
 
 from __future__ import annotations
 
+import dataclasses
 from datetime import UTC, datetime
+from email.message import EmailMessage, Message
 from pathlib import Path
 
 import pytest
@@ -25,6 +27,7 @@ from lep.modules.integrations.infrastructure.github_vcs import (
 )
 from lep.modules.knowledge.domain.entities import Note, NoteSource
 from lep.modules.knowledge.infrastructure.obsidian_vault import ObsidianVault
+from lep.modules.mail.infrastructure.hiworks_imap import HiworksMailAdapter, decode
 
 # ── 어댑터 선택 ──────────────────────────────────────────────────────────
 
@@ -299,3 +302,96 @@ def test_creating_a_note_never_overwrites_existing_text(tmp_path: Path) -> None:
 
     assert (tmp_path / "TSK-1038.md").read_text(encoding="utf-8") == original
     assert (tmp_path / "TSK-1038-dup.md").is_file()
+
+
+# ── 하이웍스 메일 ────────────────────────────────────────────────────────
+
+
+def _hiworks() -> HiworksMailAdapter:
+    return HiworksMailAdapter(
+        host="imap.invalid",
+        port=993,
+        user="pm@example.invalid",
+        password="not-a-real-password",
+        domains={"daon-corp.example": "prj-daon"},
+    )
+
+
+def _raw_mail(subject: str, sender: str, body: str) -> Message:
+    message = EmailMessage()
+    message["Message-ID"] = "<mail-001@example.invalid>"
+    message["From"] = sender
+    message["Subject"] = subject
+    message["Date"] = "Mon, 07 Sep 2026 14:20:00 +0900"
+    message.set_content(body)
+    return message
+
+
+def test_korean_subject_headers_are_decoded() -> None:
+    """하이웍스 한글 제목은 RFC 2047로 인코딩돼 온다."""
+
+    encoded = "=?UTF-8?B?7ZWc6riAIOygnOuqqQ==?="
+
+    assert decode(encoded) == "한글 제목"
+
+
+def test_sender_domain_decides_the_project() -> None:
+    parsed = _hiworks()._to_message(
+        _raw_mail("자료 공유", "이서영 <lee@daon-corp.example>", "첨부드립니다.")
+    )
+
+    assert parsed is not None
+    assert parsed.project_id == "prj-daon"
+    assert parsed.sender_org == "daon-corp.example"
+
+
+def test_unknown_domain_is_marked_unrelated() -> None:
+    parsed = _hiworks()._to_message(
+        _raw_mail("정기 점검 안내", "총무팀 <admin@other.invalid>", "안내드립니다.")
+    )
+
+    assert parsed is not None
+    assert parsed.project_id is None
+    assert parsed.classification.value == "unrelated"
+
+
+def test_schedule_wording_is_detected_but_never_claimed_as_certain() -> None:
+    """키워드 규칙은 모델이 아니다. 신뢰도를 높게 매기면 화면이 거짓을 말한다."""
+
+    parsed = _hiworks()._to_message(
+        _raw_mail(
+            "M3 검수 일정 관련",
+            "이서영 <lee@daon-corp.example>",
+            "일정 변경을 요청드립니다. 1주 연기 부탁드립니다.",
+        )
+    )
+
+    assert parsed is not None
+    assert parsed.intent == "일정 변경"
+    assert parsed.confidence is not None
+    assert parsed.confidence.value == "low"
+    assert parsed.milestone_code == "M3"
+    assert parsed.classification.value == "unclassified"
+
+
+def test_message_without_an_id_is_skipped() -> None:
+    message = EmailMessage()
+    message["From"] = "lee@daon-corp.example"
+    message["Subject"] = "제목"
+
+    assert _hiworks()._to_message(message) is None
+
+
+def test_workflow_state_is_kept_as_an_overlay_not_written_to_the_server() -> None:
+    """메일함은 사용자의 것이다. 처리 표시를 서버에 쓰지 않는다."""
+
+    adapter = _hiworks()
+    original = adapter._to_message(
+        _raw_mail("자료 공유", "이서영 <lee@daon-corp.example>", "첨부드립니다.")
+    )
+    assert original is not None
+
+    adapter.replace_message(dataclasses.replace(original, handled=True, note_id="note-1"))
+
+    assert adapter._with_overlay(original).handled is True
+    assert adapter._with_overlay(original).note_id == "note-1"

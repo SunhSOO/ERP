@@ -327,8 +327,49 @@ packages:
   stage: G
   stream: integration
   title: 하이웍스 메일 어댑터
-  goal: MailPort의 실제 구현을 붙인다. API가 막히면 IMAP 대체 경로를 쓴다.
-  dependencies: [WP-PKD-021]
-  blocked_on_input: 하이웍스 계정과 API 접근 권한
+  goal: MailPort의 실제 구현을 붙인다.
+  status: done
+  dependencies: []
+  note: >
+    그룹웨어 API 신청 대신 표준 IMAP으로 읽는다. 계정 비밀번호가 환경 변수로만
+    들어오고 읽기 전용으로 접속하므로 인증 전에 붙일 수 있다. 의도 판정은 아직
+    모델이 아니라 키워드 규칙이라 신뢰도를 낮음으로 보고한다. 실제 분류는
+    WP-PKD-033이다.
+  blocked_on_input: 하이웍스에서 POP3/IMAP 사용 설정, 계정과 비밀번호
+  configured_with:
+  - LEP_ADAPTER_MAIL=hiworks
+  - LEP_HIWORKS_USER / LEP_HIWORKS_PASSWORD
+  - LEP_HIWORKS_PROJECT_DOMAINS
+  acceptance_criteria:
+  - 한글 제목이 RFC 2047에서 디코딩된다
+  - 발신 도메인으로 프로젝트를 분류한다
+  - 메일을 지우거나 읽음 표시를 남기지 않는다
+  - 키워드 판정을 모델 추론으로 표시하지 않는다
+  risk: high
+  required_reviews: [architecture, qa_security]
+- id: WP-PKD-040
+  stage: G
+  stream: infra
+  title: 우분투 서버 배포
+  goal: 도커만 있으면 전체가 도는 자체 호스팅 구성을 만든다.
+  status: done
+  dependencies: [WP-PKD-030, WP-PKD-031, WP-PKD-032, WP-PKD-034]
+  note: >
+    서버에 kordoc, 옵시디언, 한컴, Node, 파이썬을 설치하지 않는다. Node와 kordoc은
+    백엔드 이미지에 들어가고, hwpx는 kordoc이 직접 만들어 한컴이 필요 없으며,
+    볼트는 마크다운 폴더라 GUI 앱이 필요 없다.
+  outputs:
+  - infra/api.Dockerfile
+  - infra/web.Dockerfile
+  - infra/docker-compose.yml
+  - infra/deploy.sh
+  - infra/sync-vault.sh
+  acceptance_criteria:
+  - 도커 외에 사전 설치가 필요 없다
+  - 데이터 포트가 호스트에 노출되지 않는다
+  - 컨테이너가 루트로 돌지 않는다
+  - 비밀이 이미지와 저장소에 들어가지 않는다
+  known_limitation: >
+    개발 장비에 도커가 없어 이미지는 서버에서 처음 빌드된다.
   risk: high
   required_reviews: [architecture, qa_security]

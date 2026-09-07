@@ -15,6 +15,8 @@ from datetime import UTC, datetime
 
 from ....common.adapters import (
     converter_choice,
+    hiworks_user,
+    mail_choice,
     vault_choice,
     vault_root,
 )
@@ -169,16 +171,29 @@ def _converter_credential(converter: tuple[str, str]) -> Credential:
     )
 
 
+def _mail_credential() -> Credential:
+    choice = mail_choice()
+    user = hiworks_user()
+    if choice.use_real and user:
+        return Credential(
+            kind="mail",
+            label="하이웍스 메일 필터",
+            health=LinkHealth.OK,
+            detail=f"{user} 계정으로 IMAP 연결됨",
+        )
+    return Credential(
+        kind="mail",
+        label="하이웍스 메일 필터",
+        health=LinkHealth.NOT_CONFIGURED,
+        detail=choice.unavailable_reason or "계정이 아직 설정되지 않았습니다.",
+        missing_input="하이웍스 계정과 IMAP 비밀번호",
+    )
+
+
 def _credentials(project_id: str, converter: tuple[str, str]) -> list[Credential]:
     return [
         _vault_credential(),
-        Credential(
-            kind="mail",
-            label="하이웍스 메일 필터",
-            health=LinkHealth.NOT_CONFIGURED,
-            detail="계정과 API 접근 권한이 아직 없습니다.",
-            missing_input="하이웍스 계정과 API 접근 권한",
-        ),
+        _mail_credential(),
         Credential(
             kind="vcs",
             label="깃허브 리포",

@@ -1,0 +1,112 @@
+# Luminode 자체 호스팅 구성 (ADR-010).
+#
+#   cd infra && docker compose up -d --build
+#
+# 데이터 서비스 포트를 호스트에 노출하지 않는다. 밖으로 나가는 것은 웹 하나이고,
+# 그것도 기본은 루프백이다. 사내망에 열려면 LEP_WEB_BIND를 바꾼다.
+
+name: luminode
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: infra/api.Dockerfile
+    image: luminode/api:local
+    restart: unless-stopped
+    environment:
+      LEP_ENV: production
+      LEP_SERVICE_NAME: lep-api
+      LEP_LOG_LEVEL: ${LEP_LOG_LEVEL:-INFO}
+
+      # ── 문서 변환 ──────────────────────────────────────────────────────
+      # kordoc은 이미지 안에 설치돼 있다. 한컴 오피스는 필요 없다.
+      LEP_ADAPTER_CONVERTER: ${LEP_ADAPTER_CONVERTER:-kordoc}
+      LEP_KORDOC_CLI: /usr/local/lib/node_modules/kordoc/dist/cli.js
+      LEP_KORDOC_OUTPUT_DIR: /data/kordoc-out
+
+      # ── 깃허브 ─────────────────────────────────────────────────────────
+      LEP_ADAPTER_VCS: ${LEP_ADAPTER_VCS:-fixture}
+      LEP_GITHUB_TOKEN: ${LEP_GITHUB_TOKEN:-}
+      LEP_GITHUB_REPO: ${LEP_GITHUB_REPO:-}
+      LEP_GITHUB_REPOS: ${LEP_GITHUB_REPOS:-}
+
+      # ── 옵시디언 볼트 ──────────────────────────────────────────────────
+      # 서버에 옵시디언 앱을 깔 필요가 없다. 볼트는 마크다운 폴더일 뿐이다.
+      LEP_ADAPTER_VAULT: ${LEP_ADAPTER_VAULT:-fixture}
+      LEP_OBSIDIAN_VAULT: /data/vault
+      LEP_OBSIDIAN_PROJECT_DIRS: ${LEP_OBSIDIAN_PROJECT_DIRS:-}
+
+      # ── 하이웍스 메일 ──────────────────────────────────────────────────
+      LEP_ADAPTER_MAIL: ${LEP_ADAPTER_MAIL:-fixture}
+      LEP_HIWORKS_HOST: ${LEP_HIWORKS_HOST:-imaps.hiworks.com}
+      LEP_HIWORKS_PORT: ${LEP_HIWORKS_PORT:-993}
+      LEP_HIWORKS_USER: ${LEP_HIWORKS_USER:-}
+      LEP_HIWORKS_PASSWORD: ${LEP_HIWORKS_PASSWORD:-}
+      LEP_HIWORKS_FOLDER: ${LEP_HIWORKS_FOLDER:-INBOX}
+      LEP_HIWORKS_PROJECT_DOMAINS: ${LEP_HIWORKS_PROJECT_DOMAINS:-}
+
+      # ── 로컬 LLM ───────────────────────────────────────────────────────
+      # 어댑터는 WP-PKD-033이다. ollama 프로파일로 서버만 미리 띄울 수 있다.
+      LEP_ADAPTER_LLM: ${LEP_ADAPTER_LLM:-fixture}
+      LEP_LLM_BASE_URL: ${LEP_LLM_BASE_URL:-http://ollama:11434/v1}
+    volumes:
+      # 볼트는 읽고 쓴다. 회의록과 메일을 지식화하면 여기에 파일이 생긴다.
+      - ${LEP_VAULT_HOST_PATH:-./vault}:/data/vault
+      - kordoc-out:/data/kordoc-out
+    networks:
+      - lep
+    # 포트를 호스트로 내보내지 않는다. 웹만 api에 닿으면 된다.
+    expose:
+      - "8000"
+
+  web:
+    build:
+      context: ..
+      dockerfile: infra/web.Dockerfile
+      args:
+        NEXT_PUBLIC_LEP_MOCK_SCREENS: "1"
+    image: luminode/web:local
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      # 서버 컴포넌트가 컨테이너 네트워크 안에서 api를 부른다.
+      LEP_API_BASE_URL: http://api:8000
+      LEP_ENABLE_DEV_PAGES: ${LEP_ENABLE_DEV_PAGES:-0}
+    ports:
+      # 기본은 루프백이다. 사내망에 공개하려면 .env에서 0.0.0.0으로 바꾼다.
+      - "${LEP_WEB_BIND:-127.0.0.1}:${LEP_WEB_PORT:-3000}:3000"
+    networks:
+      - lep
+
+  # 선택. `docker compose --profile llm up -d`로 함께 띄운다.
+  # OpenAI 호환 엔드포인트를 내므로 WP-PKD-033 어댑터가 붙는 즉시 연결된다.
+  ollama:
+    image: ollama/ollama:0.5.7
+    profiles: ["llm"]
+    restart: unless-stopped
+    volumes:
+      - ollama:/root/.ollama
+    networks:
+      - lep
+    expose:
+      - "11434"
+    # GPU를 쓰려면 호스트에 NVIDIA Container Toolkit이 필요하다.
+    # 없으면 아래 블록을 지우고 CPU로 돌린다.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+networks:
+  lep:
+    driver: bridge
+
+volumes:
+  kordoc-out:
+  ollama:

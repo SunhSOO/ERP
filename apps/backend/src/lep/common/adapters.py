@@ -136,3 +136,25 @@ def vault_choice() -> AdapterChoice:
         "obsidian",
         {"LEP_OBSIDIAN_VAULT": vault_root()},
     )
+
+
+# ── 하이웍스 메일 ────────────────────────────────────────────────────────
+
+
+def hiworks_user() -> str | None:
+    return os.getenv("LEP_HIWORKS_USER") or None
+
+
+def hiworks_password() -> str | None:
+    return os.getenv("LEP_HIWORKS_PASSWORD") or None
+
+
+def mail_choice() -> AdapterChoice:
+    return _select(
+        "LEP_ADAPTER_MAIL",
+        "hiworks",
+        {
+            "LEP_HIWORKS_USER": hiworks_user(),
+            "LEP_HIWORKS_PASSWORD": hiworks_password(),
+        },
+    )
