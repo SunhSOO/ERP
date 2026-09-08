@@ -79,6 +79,17 @@ class Clause:
     #: Where it landed in the WBS, or ``None`` while it still needs a human.
     wbs_mapping: str | None
     promoted_task_id: str | None = None
+    #: 절의 본문 전체. 화면의 상세 보기와 재분류가 쓴다.
+    body: str = ""
+    #: 십진 번호에서 온 위치. 화면이 트리로 그린다.
+    level: int = 1
+    parent: str | None = None
+    #: 수행해서 완료할 수 있는 일인지.
+    actionable: bool = False
+    #: 분류기의 근거, 또는 분류하지 못한 사유.
+    classified_reason: str | None = None
+    #: 어느 분류기가 답했는지. 픽스처와 실제 모델을 구분한다.
+    classified_by: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,3 +100,20 @@ class ScheduleShift:
     task_title: str
     old_end: date
     new_end: date
+
+
+@dataclass(frozen=True, slots=True)
+class ClassificationRun:
+    """분류를 한 번 돌린 결과.
+
+    몇 개를 분류했는지와 몇 개가 실패했는지를 따로 센다. 둘을 합쳐 "완료"라고
+    말하면 모델이 절반을 못 읽은 것을 사용자가 알 수 없다.
+    """
+
+    #: 어느 분류기가 답했는지. 픽스처면 아무것도 분류하지 않았다는 뜻이다.
+    classifier: str
+    total: int
+    classified: int
+    failed: int
+    #: 실제 어댑터를 요청했는데 쓰지 못한 사유. 조용히 대체하지 않는다.
+    unavailable_reason: str | None = None

@@ -13,7 +13,14 @@ from ....common.db import get_session
 from ....common.envelope import Envelope, ListEnvelope, collection, single
 from ...iam.public import CurrentUser
 from ..application.services import MAX_UPLOAD_BYTES, DeliveryService
-from ..domain.entities import Clause, Milestone, ScheduleShift, Statement, Task
+from ..domain.entities import (
+    ClassificationRun,
+    Clause,
+    Milestone,
+    ScheduleShift,
+    Statement,
+    Task,
+)
 from ..infrastructure.statement_parser import SUPPORTED_SUFFIXES
 
 router = APIRouter(prefix="/api/v1", tags=["delivery"])
@@ -92,13 +99,38 @@ class ClauseOut(BaseModel):
     confidence: str
     wbs_mapping: str | None
     promoted_task_id: str | None
+    body: str
+    level: int
+    parent: str | None
+    actionable: bool
+    classified_reason: str | None
+    classified_by: str | None
 
     @classmethod
     def of(cls, c: Clause) -> ClauseOut:
         return cls(
             id=c.id, article=c.article, task_title=c.task_title, category=c.category,
             confidence=c.confidence.value, wbs_mapping=c.wbs_mapping,
-            promoted_task_id=c.promoted_task_id,
+            promoted_task_id=c.promoted_task_id, body=c.body, level=c.level,
+            parent=c.parent, actionable=c.actionable,
+            classified_reason=c.classified_reason, classified_by=c.classified_by,
+        )
+
+
+class ClassificationRunOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    classifier: str
+    total: int
+    classified: int
+    failed: int
+    unavailable_reason: str | None
+
+    @classmethod
+    def of(cls, r: ClassificationRun) -> ClassificationRunOut:
+        return cls(
+            classifier=r.classifier, total=r.total, classified=r.classified,
+            failed=r.failed, unavailable_reason=r.unavailable_reason,
         )
 
 
@@ -230,6 +262,23 @@ def list_clauses(
 ) -> ListEnvelope[ClauseOut]:
     items = DeliveryService(db).list_clauses(statement_id)
     return collection([ClauseOut.of(i) for i in items], total=len(items))
+
+
+@router.post(
+    "/statements/{statement_id}/classify", response_model=Envelope[ClassificationRunOut]
+)
+def classify_statement(
+    statement_id: str, user: CurrentUser, db: Annotated[DbSession, Depends(get_session)]
+) -> Envelope[ClassificationRunOut]:
+    """조항을 분류한다. 사용자가 명시적으로 요청할 때만 돈다.
+
+    업로드와 붙이지 않는다. 쪼개는 것은 규칙이라 즉시 끝나고, 분류는 절마다
+    모델을 기다린다. 하나로 묶으면 업로드가 몇 분짜리 요청이 된다.
+
+    블로킹 호출이라 ``def``로 둔다. FastAPI가 스레드풀에서 돌린다.
+    """
+
+    return single(ClassificationRunOut.of(DeliveryService(db).classify_statement(statement_id)))
 
 
 @router.post("/clauses/{clause_id}/promote-to-task", response_model=Envelope[TaskOut])

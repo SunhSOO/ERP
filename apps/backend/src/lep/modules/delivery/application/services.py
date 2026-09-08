@@ -24,6 +24,7 @@ from ....common.problems import ProblemError, not_found, state_conflict
 from ...knowledge.public import StatementSection, write_statement_notes
 from ...projects.public import require_project
 from ..domain.entities import (
+    ClassificationRun,
     Clause,
     Confidence,
     Milestone,
@@ -32,6 +33,8 @@ from ..domain.entities import (
     Task,
     TaskStatus,
 )
+from ..domain.ports import Category, SectionInput
+from ..infrastructure.llm_classifier import build_classifier
 from ..infrastructure.models import ClauseRow, MilestoneRow, StatementRow, TaskRow
 from ..infrastructure.statement_parser import SUPPORTED_SUFFIXES, parse
 
@@ -117,6 +120,12 @@ def _to_clause(row: ClauseRow) -> Clause:
         confidence=Confidence(row.confidence),
         wbs_mapping=row.wbs_mapping,
         promoted_task_id=row.promoted_task_id,
+        body=row.body,
+        level=row.level,
+        parent=row.parent,
+        actionable=row.actionable,
+        classified_reason=row.classified_reason,
+        classified_by=row.classified_by,
     )
 
 
@@ -283,6 +292,9 @@ class DeliveryService:
                     ordinal=parsed.ordinal,
                     article=parsed.article,
                     task_title=parsed.text,
+                    body=parsed.body,
+                    level=parsed.level,
+                    parent=parsed.parent,
                     category="미분류",
                     confidence=Confidence.LOW.value,
                     wbs_mapping=None,
@@ -310,6 +322,72 @@ class DeliveryService:
             )
 
         return _to_statement(row)
+
+    def classify_statement(self, statement_id: str) -> ClassificationRun:
+        """과업지시서의 절들을 분류한다.
+
+        업로드와 나누지 않고 여기서 따로 하는 이유가 있다. 규칙으로 쪼개는 것은
+        즉시 끝나고 모델에 묻는 것은 절마다 몇 초씩 걸린다. 하나로 묶으면
+        업로드 자체가 몇 분짜리 요청이 되고, 모델이 없는 환경에서는 아무 이득
+        없이 느려지기만 한다.
+
+        이미 분류된 절은 건드리지 않는다. 사람이 고쳐 놓은 값을 재분류가
+        되돌리면 검토한 보람이 없다.
+        """
+
+        statement = self._db.get(StatementRow, statement_id)
+        if statement is None:
+            raise not_found(f"과업지시서를 찾을 수 없습니다: {statement_id}")
+
+        rows = list(
+            self._db.scalars(
+                select(ClauseRow)
+                .where(ClauseRow.statement_id == statement_id)
+                .order_by(ClauseRow.ordinal)
+            ).all()
+        )
+        pending = [r for r in rows if r.category == Category.UNCLASSIFIED.value]
+
+        classifier, unavailable = build_classifier()
+        if not pending:
+            return ClassificationRun(
+                classifier=classifier.name,
+                total=len(rows),
+                classified=0,
+                failed=0,
+                unavailable_reason=unavailable,
+            )
+
+        results = classifier.classify(
+            [
+                SectionInput(number=r.article, title=r.task_title, body=r.body)
+                for r in pending
+            ]
+        )
+
+        classified = 0
+        for row, result in zip(pending, results, strict=True):
+            row.classified_by = classifier.name
+            row.classified_reason = result.reason or None
+            if result.category is Category.UNCLASSIFIED:
+                continue
+            row.category = result.category.value
+            row.confidence = result.confidence.value
+            row.actionable = result.actionable
+            classified += 1
+
+        statement.classified_count = sum(
+            1 for r in rows if r.category != Category.UNCLASSIFIED.value
+        )
+        self._db.flush()
+
+        return ClassificationRun(
+            classifier=classifier.name,
+            total=len(rows),
+            classified=classified,
+            failed=len(pending) - classified,
+            unavailable_reason=unavailable,
+        )
 
     # ── writes ─────────────────────────────────────────────────────────────
     def promote_clause(self, clause_id: str) -> Task:

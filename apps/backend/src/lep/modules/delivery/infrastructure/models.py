@@ -107,8 +107,21 @@ class ClauseRow(Base):
     ordinal: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     article: Mapped[str] = mapped_column(String(100), nullable=False)
     task_title: Mapped[str] = mapped_column(Text, nullable=False)
+    #: 절의 본문 전체. 분류할 때 모델에 넘기는 입력이고, 재분류할 때 원본
+    #: 문서를 다시 읽지 않아도 되게 한다. 스캔본은 다시 읽으면 OCR을 다시 돈다.
+    body: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    #: 십진 번호의 깊이와 상위 절. 화면의 트리와 볼트의 링크가 이걸 쓴다.
+    level: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    parent: Mapped[str | None] = mapped_column(String(40), nullable=True)
     category: Mapped[str] = mapped_column(String(40), nullable=False, default="미분류")
     confidence: Mapped[str] = mapped_column(String(10), nullable=False, default="low")
+    #: 수행해서 완료할 수 있는 일인지. 계약 조건은 거짓이다.
+    actionable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    #: 분류기가 그렇게 판단한 근거. 분류하지 못했으면 그 사유가 들어간다.
+    #: 사람이 검토할 때 읽는 값이라 비워 두지 않는다.
+    classified_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: 어느 분류기가 답했는지. 픽스처와 실제 모델을 화면에서 구분한다.
+    classified_by: Mapped[str | None] = mapped_column(String(80), nullable=True)
     wbs_mapping: Mapped[str | None] = mapped_column(String(120), nullable=True)
     promoted_task_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True
