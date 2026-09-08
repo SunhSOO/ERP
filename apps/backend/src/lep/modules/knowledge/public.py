@@ -1,53 +1,59 @@
 """Stable public interface for the knowledge module.
 
-Screen 06 turns a mail message into a vault note. It does that through
-:func:`create_note_from`, never by writing knowledge's storage itself.
+Projects asks for a vault folder when a project is created. Mail asks for a note
+to be written. Neither touches the filesystem itself.
 """
 
 from __future__ import annotations
 
 from functools import lru_cache
 
-from ...common.adapters import vault_choice, vault_root
-from .application.services import KnowledgeService
-from .domain.entities import NoteSource
-from .domain.ports import VaultPort
-from .infrastructure.fixture_vault import FixtureMeetingRepository, FixtureVault
 from .infrastructure.obsidian_vault import ObsidianVault
 
-__all__ = ["create_note_from", "get_knowledge_service", "vault_note_count"]
-
-
-def _vault() -> VaultPort:
-    """Pick the vault per ADR-018. Default is the fixture."""
-
-    root = vault_root()
-    if vault_choice().use_real and root is not None:
-        return ObsidianVault.from_env(root)
-    return FixtureVault()
+__all__ = [
+    "create_note_from",
+    "ensure_project_vault",
+    "get_vault",
+    "project_vault_summary",
+]
 
 
 @lru_cache(maxsize=1)
-def get_knowledge_service() -> KnowledgeService:
-    # Meetings stay on the fixture. The vault is files on disk; meeting records
-    # are not, and they get a real store in WP-PKD-020.
-    return KnowledgeService(_vault(), FixtureMeetingRepository())
+def get_vault() -> ObsidianVault:
+    return ObsidianVault.from_env()
+
+
+def ensure_project_vault(project_id: str, code: str) -> str:
+    """프로젝트 볼트 폴더를 만든다. 프로젝트를 만들 때 호출된다.
+
+    실패해도 프로젝트 생성 자체를 막지 않는다. 볼트는 나중에 다시 만들 수 있고,
+    화면 09가 볼트 상태를 그대로 보여 준다.
+    """
+
+    try:
+        return str(get_vault().ensure(code))
+    except OSError:
+        return ""
+
+
+def project_vault_summary(project_id: str, code: str) -> tuple[str, str]:
+    """홈 카드에 쓸 ``(health, note)``."""
+
+    status = get_vault().status(project_id, code)
+    note = {
+        "ok": f"노트 {status.note_count}개",
+        "stale": f"노트 {status.note_count}개 · 최근 변경 없음",
+        "failed": "볼트 폴더 없음",
+    }[status.health.value]
+    # 볼트의 SyncHealth와 프로젝트 카드의 SyncHealth는 값 집합이 다르다.
+    # failed는 카드에서 mismatch로 보여 준다.
+    health = {"ok": "ok", "stale": "stale", "failed": "mismatch"}[status.health.value]
+    return health, note
 
 
 def create_note_from(
-    project_id: str, *, note_id: str, title: str, body: str, source: str
+    code: str, *, title: str, body: str, folder: str = "notes"
 ) -> str:
-    """Create a vault note on another module's behalf and return its ID."""
+    """다른 모듈을 대신해 볼트에 노트를 만든다."""
 
-    note = get_knowledge_service().create_note(
-        project_id,
-        note_id=note_id,
-        title=title,
-        body=body,
-        source=NoteSource(source),
-    )
-    return note.id
-
-
-def vault_note_count(project_id: str) -> int:
-    return get_knowledge_service().get_vault_status(project_id).note_count
+    return get_vault().create_note(code, title=title, body=body, folder=folder)

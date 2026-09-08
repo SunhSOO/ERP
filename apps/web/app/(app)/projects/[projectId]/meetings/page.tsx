@@ -1,184 +1,114 @@
 import Link from "next/link";
-import { AiPanel, Card, CardTitle, EmptyState, StatusTag, Table, Th } from "@lep/ui";
+import { AiPanel, Card, CardTitle, EmptyState, StatusTag } from "@lep/ui";
 import { gateway } from "@/src/shared/data/gateway";
-import { applyMeetingAction } from "@/src/shared/data/actions";
-import { ActionButton } from "@/src/shared/ui/ActionButton";
+import { createMeetingNoteAction } from "@/src/shared/data/actions";
 import { PageHeader } from "@/src/shared/ui/PageHeader";
+import { MeetingNoteForm } from "@/src/widgets/knowledge/MeetingNoteForm";
 
 export const dynamic = "force-dynamic";
 
-const APPLY_STATUS = {
-  pending: { tone: "warning", label: "반영 대기" },
-  applied: { tone: "success", label: "반영 완료" },
-  dismissed: { tone: "idle", label: "반영 안 함" },
-} as const;
-
-/** 08 회의록 → 지식화·변경관리. */
+/** 08 회의록.
+ *
+ * 회의록은 별도 저장소를 갖지 않는다. 프로젝트 볼트의 `meetings` 폴더에 있는
+ * 노트가 곧 회의록이다. 그래서 옵시디언에서 쓴 것과 여기서 쓴 것이 같은 파일이다.
+ *
+ * 결정과 액션아이템 추출은 아직 없다. 로컬 LLM이 붙는 WP-PKD-033의 일이다.
+ * 없는 기능을 있는 것처럼 보이는 예시로 채우지 않는다.
+ */
 export default async function MeetingsPage({
   params,
   searchParams,
 }: {
   params: Promise<{ projectId: string }>;
-  searchParams: Promise<{ meeting?: string }>;
+  searchParams: Promise<{ note?: string }>;
 }) {
   const { projectId } = await params;
-  const { meeting: selectedId } = await searchParams;
+  const { note: selectedId } = await searchParams;
 
-  const meetings = await gateway.listMeetings(projectId);
+  const notes = await gateway.listNotes(projectId);
+  const meetings = notes.filter((note) => note.source === "meeting");
+  const action = createMeetingNoteAction.bind(null, projectId);
 
   if (meetings.length === 0) {
     return (
       <>
         <PageHeader title="회의록" />
         <EmptyState
-          description="회의록을 올리면 AI가 결정과 액션아이템을 추출합니다."
+          description="여기서 쓴 회의록은 프로젝트 볼트의 meetings 폴더에 마크다운으로 저장됩니다. 옵시디언에서 열어 이어 쓸 수 있습니다."
           title="아직 회의록이 없습니다"
           variant="no-data"
         />
+        <MeetingNoteForm action={action} startOpen />
       </>
     );
   }
 
-  const detail = await gateway.getMeeting(selectedId ?? meetings[0].id);
-  const { meeting, decisions, action_items: actionItems, preview } = detail;
-  const pending = meeting.apply_status === "pending";
+  const selected =
+    meetings.find((note) => note.id === selectedId) ?? meetings[0];
 
   return (
     <>
-      <PageHeader title="회의록" />
+      <PageHeader
+        actions={<MeetingNoteForm action={action} />}
+        note={`볼트 회의록 ${meetings.length}건`}
+        title="회의록"
+      />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(240px,320px)_1fr]">
         <section aria-label="회의록 목록" className="flex flex-col gap-2">
           <ul className="m-0 flex list-none flex-col gap-2 p-0">
-            {meetings.map((item) => {
-              const status = APPLY_STATUS[item.apply_status];
-              return (
-                <li key={item.id}>
-                  <Link className="block no-underline" href={`?meeting=${item.id}`}>
-                    <Card className={item.id === meeting.id ? "border-accent" : undefined}>
-                      <div className="flex items-baseline justify-between gap-2">
-                        <span className="font-mono text-[12px]">{item.code}</span>
-                        <span className="text-muted text-[11px]">
-                          {item.held_at.slice(5, 10)}
-                        </span>
-                      </div>
-                      <CardTitle>{item.title}</CardTitle>
-                      <StatusTag tone={status.tone}>
-                        {item.apply_status === "pending"
-                          ? `${status.label} ${item.pending_count}`
-                          : status.label}
-                      </StatusTag>
-                    </Card>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-
-        <section aria-label="회의록 상세" className="flex flex-col gap-4">
-          <div>
-            <h2 className="m-0 text-[17px]">
-              {meeting.code} · {meeting.title}
-            </h2>
-            <p className="text-muted m-0 text-[12px]">
-              {meeting.held_at.slice(0, 16).replace("T", " ")} · 참석{" "}
-              {meeting.attendees.join(", ")}
-            </p>
-          </div>
-
-          <h3 className="text-muted m-0 text-[11px] tracking-wide uppercase">AI 추출 결정</h3>
-          <ul className="m-0 flex list-none flex-col gap-2 p-0">
-            {decisions.map((decision) => (
-              <li className="flex flex-wrap items-center gap-2 text-[13px]" key={decision.id}>
-                <span className="font-mono text-[12px]">결정 #{decision.ordinal}</span>
-                <span className="flex-1">{decision.text}</span>
-                <StatusTag tone={decision.applied ? "success" : "warning"}>
-                  {decision.applied ? "반영됨" : "WBS 반영 대기"}
-                </StatusTag>
+            {meetings.map((item) => (
+              <li key={item.id}>
+                <Link className="block no-underline" href={`?note=${item.id}`}>
+                  <Card className={item.id === selected.id ? "border-accent" : undefined}>
+                    <CardTitle>{item.title}</CardTitle>
+                    <span className="text-muted text-[11px]">
+                      {item.updated_at ?? "날짜 없음"}
+                    </span>
+                    {item.warning ? (
+                      <StatusTag tone="warning">{item.warning}</StatusTag>
+                    ) : null}
+                  </Card>
+                </Link>
               </li>
             ))}
           </ul>
+        </section>
 
-          <h3 className="text-muted m-0 text-[11px] tracking-wide uppercase">액션아이템</h3>
-          <Table caption="회의에서 나온 액션아이템">
-            <thead>
-              <tr>
-                <Th>내용</Th>
-                <Th>담당</Th>
-                <Th>기한</Th>
-                <Th>상태</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {actionItems.map((item) => (
-                <tr key={item.id}>
-                  <td>{item.text}</td>
-                  <td>{item.owner ?? <span className="text-muted">미지정</span>}</td>
-                  <td className="tabular-nums">
-                    {item.due ?? <span className="text-muted">즉시</span>}
-                  </td>
-                  <td>
-                    {/* "완료"는 실제 결과가 있을 때만 쓴다. 승인 대기는 승인 대기로 표시한다. */}
-                    <StatusTag tone={item.task_created ? "success" : "warning"}>
-                      {item.task_created ? "업무 생성됨" : "승인 필요"}
-                    </StatusTag>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
+        <section aria-label="회의록 내용" className="flex flex-col gap-4">
+          <div>
+            <h2 className="m-0 text-[17px]">{selected.title}</h2>
+            <p className="text-muted m-0 text-[12px]">
+              {selected.updated_at ?? "날짜 없음"}
+              {selected.task_code ? ` · ${selected.task_code}` : ""}
+            </p>
+          </div>
 
-          {preview.milestone_code && preview.new_end ? (
-            <AiPanel
-              actions={
-                pending ? (
-                  <>
-                    <ActionButton
-                      action={applyMeetingAction.bind(null, projectId, meeting.id, "wbs")}
-                      variant="primary"
-                    >
-                      WBS에 반영
-                    </ActionButton>
-                    <ActionButton
-                      action={applyMeetingAction.bind(
-                        null,
-                        projectId,
-                        meeting.id,
-                        "vault_only",
-                      )}
-                    >
-                      볼트에만 지식화
-                    </ActionButton>
-                    <ActionButton
-                      action={applyMeetingAction.bind(null, projectId, meeting.id, "dismiss")}
-                    >
-                      무시
-                    </ActionButton>
-                  </>
-                ) : null
-              }
-              title="변경 반영 미리보기"
-            >
-              <p className="m-0">
-                {preview.milestone_code} 마일스톤 기한을{" "}
-                <strong className="tabular-nums">{preview.new_end}</strong>로 변경하면 후행 업무{" "}
-                {preview.shifts.length}건의 기한도 함께 밀립니다.
-              </p>
-              {preview.shifts.length > 0 ? (
-                <ul className="m-0 mt-2 flex list-none flex-col gap-1 p-0 text-[12px]">
-                  {preview.shifts.map((shift) => (
-                    <li key={shift.task_code}>
-                      <span className="font-mono">{shift.task_code}</span> {shift.task_title} —{" "}
-                      <span className="tabular-nums">{shift.old_end}</span>
-                      <span aria-hidden="true"> → </span>
-                      <span className="tabular-nums">{shift.new_end}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </AiPanel>
+          <pre className="m-0 overflow-x-auto border border-divider p-4 text-[12.5px] leading-relaxed whitespace-pre-wrap">
+            {selected.body}
+          </pre>
+
+          {selected.backlinks.length > 0 ? (
+            <div className="flex flex-col gap-1">
+              <h3 className="text-muted m-0 text-[11px] tracking-wide uppercase">
+                이 노트를 가리키는 노트
+              </h3>
+              <ul className="m-0 flex list-none flex-wrap gap-2 p-0 text-[12px]">
+                {selected.backlinks.map((backlink) => (
+                  <li key={backlink.target}>
+                    <Link href={`?note=${backlink.target}`}>{backlink.label}</Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
           ) : null}
+
+          <AiPanel title="AI 추출">
+            <p className="m-0">
+              결정과 액션아이템 자동 추출은 아직 없습니다. 로컬 LLM 연동(WP-PKD-033)에서
+              붙습니다. 그때까지 일정 변경은 WBS 화면에서 직접 반영해 주세요.
+            </p>
+          </AiPanel>
         </section>
       </div>
     </>

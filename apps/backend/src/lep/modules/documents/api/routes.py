@@ -5,10 +5,13 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict
+from sqlalchemy.orm import Session as DbSession
 
+from ....common.db import get_session
 from ....common.envelope import Envelope, ListEnvelope, collection, single
+from ...iam.public import CurrentUser
 from ..domain.entities import (
     Document,
     DriveCategory,
@@ -95,36 +98,46 @@ class DriveCategoryOut(BaseModel):
 
 
 @router.get("/projects/{project_id}/documents", response_model=ListEnvelope[DocumentOut])
-async def list_documents(project_id: str) -> ListEnvelope[DocumentOut]:
-    items = get_document_service().list_documents(project_id)
+async def list_documents(
+    project_id: str,
+    user: CurrentUser,
+    db: Annotated[DbSession, Depends(get_session)],
+) -> ListEnvelope[DocumentOut]:
+    items = get_document_service().list_documents(db, project_id)
     return collection([DocumentOut.of(item) for item in items], total=len(items))
 
 
 @router.get("/documents/{document_id}", response_model=Envelope[DocumentOut])
-async def get_document(document_id: str) -> Envelope[DocumentOut]:
+async def get_document(document_id: str, user: CurrentUser) -> Envelope[DocumentOut]:
     return single(DocumentOut.of(get_document_service().get_document(document_id)))
 
 
 @router.post("/documents/{document_id}/convert", response_model=Envelope[DocumentOut])
-async def convert_document(document_id: str) -> Envelope[DocumentOut]:
+async def convert_document(document_id: str, user: CurrentUser) -> Envelope[DocumentOut]:
     return single(DocumentOut.of(get_document_service().convert(document_id)))
 
 
 @router.post("/documents/{document_id}/retry", response_model=Envelope[DocumentOut])
-async def retry_document(document_id: str) -> Envelope[DocumentOut]:
+async def retry_document(document_id: str, user: CurrentUser) -> Envelope[DocumentOut]:
     return single(DocumentOut.of(get_document_service().retry(document_id)))
 
 
 @router.get("/projects/{project_id}/drive", response_model=ListEnvelope[DriveCategoryOut])
-async def get_drive(project_id: str) -> ListEnvelope[DriveCategoryOut]:
-    items = get_document_service().drive_summary(project_id)
+async def get_drive(
+    project_id: str,
+    user: CurrentUser,
+    db: Annotated[DbSession, Depends(get_session)],
+) -> ListEnvelope[DriveCategoryOut]:
+    items = get_document_service().drive_summary(db, project_id)
     return collection([DriveCategoryOut.of(item) for item in items], total=len(items))
 
 
 @router.get("/projects/{project_id}/drive/files", response_model=ListEnvelope[DriveFileOut])
 async def list_drive_files(
     project_id: str,
+    user: CurrentUser,
+    db: Annotated[DbSession, Depends(get_session)],
     category: Annotated[DriveCategory | None, Query()] = None,
 ) -> ListEnvelope[DriveFileOut]:
-    items = get_document_service().list_files(project_id, category)
+    items = get_document_service().list_files(db, project_id, category)
     return collection([DriveFileOut.of(item) for item in items], total=len(items))

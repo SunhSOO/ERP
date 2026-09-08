@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import UTC, datetime
 from typing import Protocol
+
+from sqlalchemy.orm import Session as DbSession
 
 from ....common.problems import not_found, state_conflict
 from ...delivery.public import adopt_vcs_task
@@ -12,6 +15,7 @@ from ...projects.public import require_project
 from ..domain.entities import (
     Credential,
     GpuPriority,
+    LinkHealth,
     LlmServer,
     Mismatch,
     MismatchKind,
@@ -51,26 +55,42 @@ class IntegrationService:
         self._adapter = adapter
 
     # ── repository reconciliation ──────────────────────────────────────────
-    def vcs_status(self, project_id: str) -> VcsStatus:
-        require_project(project_id)
+    def vcs_status(self, db: DbSession, project_id: str) -> VcsStatus:
+        """저장소 연동 상태.
+
+        새로 만든 프로젝트에는 저장소가 아직 없다. 그것은 오류가 아니라 상태이므로
+        404 대신 "미연결"을 낸다. 화면 07은 이 값을 보고 무엇을 설정해야 하는지
+        말해 준다.
+        """
+
+        require_project(db, project_id)
         status = self._adapter.vcs_status(project_id)
         if status is None:
-            raise not_found(f"깃허브 연동 정보를 찾을 수 없습니다: {project_id}")
+            return VcsStatus(
+                project_id=project_id,
+                repository="",
+                health=LinkHealth.NOT_CONFIGURED,
+                last_sync_at=datetime.now(tz=UTC),
+                open_pull_requests=0,
+                match_rate_percent=0,
+            )
         return status
 
-    def list_mismatches(self, project_id: str) -> list[Mismatch]:
-        require_project(project_id)
+    def list_mismatches(self, db: DbSession, project_id: str) -> list[Mismatch]:
+        require_project(db, project_id)
         return self._adapter.list_mismatches(project_id)
 
-    def list_mappings(self, project_id: str) -> list[TaskMapping]:
-        require_project(project_id)
+    def list_mappings(self, db: DbSession, project_id: str) -> list[TaskMapping]:
+        require_project(db, project_id)
         return self._adapter.list_mappings(project_id)
 
-    def resync_vcs(self, project_id: str) -> VcsStatus:
-        require_project(project_id)
+    def resync_vcs(self, db: DbSession, project_id: str) -> VcsStatus:
+        require_project(db, project_id)
+        if self._adapter.vcs_status(project_id) is None:
+            return self.vcs_status(db, project_id)
         return self._adapter.resync_vcs(project_id)
 
-    def resolve_mismatch(self, mismatch_id: str) -> Mismatch:
+    def resolve_mismatch(self, db: DbSession, mismatch_id: str) -> Mismatch:
         """Act on a reconciliation finding.
 
         Undefined work becomes a real WBS task, through delivery's public
@@ -85,7 +105,7 @@ class IntegrationService:
             raise state_conflict("이미 처리된 불일치입니다.")
 
         if mismatch.kind is MismatchKind.UNDEFINED_WORK and mismatch.task_code:
-            adopt_vcs_task(mismatch.task_code)
+            adopt_vcs_task(db, mismatch.project_id, mismatch.task_code)
 
         return self._adapter.replace_mismatch(replace(mismatch, resolved=True))
 
@@ -107,9 +127,9 @@ class IntegrationService:
         return self._adapter.list_models()
 
     def set_model(
-        self, project_id: str, *, model: str, priority: GpuPriority
+        self, db: DbSession, project_id: str, *, model: str, priority: GpuPriority
     ) -> ProjectModel:
-        require_project(project_id)
+        require_project(db, project_id)
         current = next(
             (item for item in self._adapter.list_models() if item.project_id == project_id),
             None,
@@ -120,8 +140,8 @@ class IntegrationService:
             replace(current, model=model, priority=priority, state=ModelState.RUNNING)
         )
 
-    def restart_model(self, project_id: str) -> ProjectModel:
-        require_project(project_id)
+    def restart_model(self, db: DbSession, project_id: str) -> ProjectModel:
+        require_project(db, project_id)
         current = next(
             (item for item in self._adapter.list_models() if item.project_id == project_id),
             None,
@@ -132,6 +152,6 @@ class IntegrationService:
             raise state_conflict("모델이 설정되지 않아 재시작할 수 없습니다.")
         return self._adapter.replace_model(replace(current, state=ModelState.RUNNING))
 
-    def credentials(self, project_id: str) -> list[Credential]:
-        require_project(project_id)
+    def credentials(self, db: DbSession, project_id: str) -> list[Credential]:
+        require_project(db, project_id)
         return self._adapter.credentials(project_id, converter_status())

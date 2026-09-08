@@ -25,6 +25,8 @@ CONTENT_TYPE = "application/problem+json"
 #: Codes this track uses. The wider vocabulary lives in the contract document.
 CODE_TITLES: dict[str, str] = {
     "BAD_REQUEST": "요청을 처리할 수 없습니다.",
+    "AUTHENTICATION_REQUIRED": "로그인이 필요합니다.",
+    "FORBIDDEN": "이 작업을 수행할 권한이 없습니다.",
     "NOT_FOUND": "대상을 찾을 수 없습니다.",
     "STATE_CONFLICT": "현재 상태에서는 처리할 수 없습니다.",
     "VALIDATION_FAILED": "입력값을 확인해 주세요.",
@@ -34,6 +36,8 @@ CODE_TITLES: dict[str, str] = {
 
 CODE_STATUS: dict[str, int] = {
     "BAD_REQUEST": 400,
+    "AUTHENTICATION_REQUIRED": 401,
+    "FORBIDDEN": 403,
     "NOT_FOUND": 404,
     "STATE_CONFLICT": 409,
     "VALIDATION_FAILED": 422,
@@ -134,9 +138,13 @@ def register_problem_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(StarletteHTTPException)
     async def handle_http(request: Request, exc: StarletteHTTPException) -> JSONResponse:
-        code = {400: "BAD_REQUEST", 404: "NOT_FOUND", 409: "STATE_CONFLICT"}.get(
-            exc.status_code, "INTERNAL_ERROR"
-        )
+        code = {
+            400: "BAD_REQUEST",
+            401: "AUTHENTICATION_REQUIRED",
+            403: "FORBIDDEN",
+            404: "NOT_FOUND",
+            409: "STATE_CONFLICT",
+        }.get(exc.status_code, "INTERNAL_ERROR")
         status = exc.status_code if code != "INTERNAL_ERROR" else 500
         detail = exc.detail if isinstance(exc.detail, str) else None
         return _response(code, status, request.url.path, detail)

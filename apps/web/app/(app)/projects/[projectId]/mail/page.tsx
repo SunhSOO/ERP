@@ -1,11 +1,7 @@
 import Link from "next/link";
 import { AiPanel, Card, EmptyState, StatusTag } from "@lep/ui";
 import { gateway } from "@/src/shared/data/gateway";
-import {
-  applyMailToWbsAction,
-  dismissMailAction,
-  promoteMailAction,
-} from "@/src/shared/data/actions";
+import { dismissMailAction, promoteMailAction } from "@/src/shared/data/actions";
 import { ActionButton } from "@/src/shared/ui/ActionButton";
 import { PageHeader } from "@/src/shared/ui/PageHeader";
 
@@ -39,8 +35,10 @@ export default async function MailPage({
     );
   }
 
-  const detail = await gateway.getMail(selectedId ?? messages[0].id);
-  const { message, schedule_preview: preview } = detail;
+  const [message, user] = await Promise.all([
+    gateway.getMail(selectedId ?? messages[0].id),
+    gateway.me(),
+  ]);
   const unclassified = messages.filter(
     (item) => item.classification === "unclassified" && !item.handled,
   );
@@ -84,7 +82,7 @@ export default async function MailPage({
         <section aria-label="메일 상세" className="flex flex-col gap-3">
           <h2 className="m-0 text-[17px]">{message.subject}</h2>
           <p className="text-muted m-0 text-[12px]">
-            {message.sender_name} ({message.sender_org}) → 김서준 ·{" "}
+            {message.sender_name} ({message.sender_org}) → {user?.display_name} ·{" "}
             <span className="tabular-nums">{message.received_at.slice(11, 16)}</span>
           </p>
 
@@ -109,18 +107,6 @@ export default async function MailPage({
                 >
                   지식화 (볼트에 노트 생성)
                 </ActionButton>
-                <ActionButton
-                  action={applyMailToWbsAction.bind(null, projectId, message.id)}
-                  disabledReason={
-                    preview.length === 0
-                      ? "이 메일에는 반영할 일정 변경이 없습니다."
-                      : message.handled
-                        ? "이미 처리된 메일입니다."
-                        : undefined
-                  }
-                >
-                  WBS 일정에 반영
-                </ActionButton>
                 <ActionButton action={dismissMailAction.bind(null, projectId, message.id)}>
                   분류 아님
                 </ActionButton>
@@ -137,18 +123,10 @@ export default async function MailPage({
             ) : (
               <p className="m-0">추가로 제안할 조치가 없습니다.</p>
             )}
-            {preview.length > 0 ? (
-              <ul className="m-0 mt-2 flex list-none flex-col gap-1 p-0 text-[12px]">
-                {preview.map((shift) => (
-                  <li key={shift.task_code}>
-                    <span className="font-mono">{shift.task_code}</span> {shift.task_title} —{" "}
-                    <span className="tabular-nums">{shift.old_end}</span>
-                    <span aria-hidden="true"> → </span>
-                    <span className="tabular-nums">{shift.new_end}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
+            <p className="text-muted m-0 mt-2 text-[12px]">
+              메일 내용으로 일정을 자동 변경하지 않습니다. 필요한 변경은 WBS 화면에서
+              직접 반영해 주세요.
+            </p>
           </AiPanel>
         </section>
       </div>

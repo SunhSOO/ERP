@@ -1,151 +1,133 @@
-import { LepClient } from "@lep/api-client";
+import { cookies } from "next/headers";
+import { ApiProblem, LepClient } from "@lep/api-client";
 import type {
-  ApplyPreview,
   Clause,
   Credential,
+  CurrentUser,
   DriveCategory,
   DriveFile,
   LepDocument,
   LlmServer,
-  MailDetail,
   MailMessage,
-  MeetingDetail,
-  Meeting,
   Milestone,
   Mismatch,
   Note,
   Project,
   ProjectModel,
   ProjectSummary,
-  ScheduleShift,
+  SignupState,
   Statement,
   Task,
   TaskMapping,
+  UploadLimits,
   VaultStatus,
   VcsStatus,
 } from "@lep/api-client";
 
-/** 백엔드 주소. 개발 기본값은 uvicorn 기본 포트다. */
+/** 백엔드 주소. 컨테이너 안에서는 compose 네트워크의 서비스 이름을 쓴다. */
 const BASE_URL = process.env.LEP_API_BASE_URL ?? "http://127.0.0.1:8000";
 
-const client = new LepClient({ baseUrl: BASE_URL });
-
-/** 화면이 데이터에 닿는 유일한 통로.
+/** 브라우저의 세션 쿠키를 그대로 백엔드에 넘기는 클라이언트.
  *
- * 목 데이터는 백엔드 픽스처 어댑터 한 곳에만 있다. 프론트엔드에 따로 두지
- * 않는다. 그래야 WP-PKD-020에서 PostgreSQL로 바뀔 때 화면이 그대로 남는다.
+ * 서버 컴포넌트는 브라우저가 아니므로 쿠키가 자동으로 붙지 않는다. 여기서
+ * 넘기지 않으면 로그인한 사용자의 요청이 백엔드에서 401이 된다.
  */
+async function client(): Promise<LepClient> {
+  const jar = await cookies();
+  const header = jar
+    .getAll()
+    .map((c) => `${c.name}=${c.value}`)
+    .join("; ");
+  return new LepClient({
+    baseUrl: BASE_URL,
+    headers: header ? { cookie: header } : undefined,
+  });
+}
+
+async function get<T>(path: string): Promise<T> {
+  return (await (await client()).get<T>(path)).data;
+}
+
+async function list<T>(path: string): Promise<T[]> {
+  return (await (await client()).list<T>(path)).data;
+}
+
+/** 화면이 데이터에 닿는 유일한 통로. */
 export const gateway = {
-  listProjects: async (): Promise<Project[]> =>
-    (await client.list<Project>("/api/v1/projects")).data,
+  // ── 인증 ────────────────────────────────────────────────────────────
+  signupState: (): Promise<SignupState> => get<SignupState>("/api/v1/auth/signup-state"),
 
-  getProject: async (id: string): Promise<Project> =>
-    (await client.get<Project>(`/api/v1/projects/${id}`)).data,
+  /** 로그인하지 않았으면 ``null``. 401을 예외로 올리지 않는다. */
+  me: async (): Promise<CurrentUser | null> => {
+    try {
+      return await get<CurrentUser>("/api/v1/auth/me");
+    } catch (error) {
+      if (error instanceof ApiProblem && error.problem.status === 401) return null;
+      throw error;
+    }
+  },
 
-  getSummary: async (id: string): Promise<ProjectSummary> =>
-    (await client.get<ProjectSummary>(`/api/v1/projects/${id}/summary`)).data,
+  // ── 프로젝트 ────────────────────────────────────────────────────────
+  listProjects: (): Promise<Project[]> => list<Project>("/api/v1/projects"),
 
-  listMilestones: async (id: string): Promise<Milestone[]> =>
-    (await client.list<Milestone>(`/api/v1/projects/${id}/milestones`)).data,
+  getProject: (id: string): Promise<Project> => get<Project>(`/api/v1/projects/${id}`),
 
-  listTasks: async (id: string): Promise<Task[]> =>
-    (await client.list<Task>(`/api/v1/projects/${id}/tasks`)).data,
+  getSummary: (id: string): Promise<ProjectSummary> =>
+    get<ProjectSummary>(`/api/v1/projects/${id}/summary`),
 
-  listStatements: async (id: string): Promise<Statement[]> =>
-    (await client.list<Statement>(`/api/v1/projects/${id}/statements`)).data,
+  // ── 과업지시서와 WBS ────────────────────────────────────────────────
+  listStatements: (id: string): Promise<Statement[]> =>
+    list<Statement>(`/api/v1/projects/${id}/statements`),
 
-  listClauses: async (statementId: string): Promise<Clause[]> =>
-    (await client.list<Clause>(`/api/v1/statements/${statementId}/clauses`)).data,
+  listClauses: (statementId: string): Promise<Clause[]> =>
+    list<Clause>(`/api/v1/statements/${statementId}/clauses`),
 
-  promoteClause: async (clauseId: string): Promise<Task> =>
-    (await client.post<{ data: Task }>(`/api/v1/clauses/${clauseId}/promote-to-task`)).data,
+  uploadLimits: (): Promise<UploadLimits> => get<UploadLimits>("/api/v1/upload-limits"),
 
-  getVault: async (id: string): Promise<VaultStatus> =>
-    (await client.get<VaultStatus>(`/api/v1/projects/${id}/vault`)).data,
+  listMilestones: (id: string): Promise<Milestone[]> =>
+    list<Milestone>(`/api/v1/projects/${id}/milestones`),
 
-  syncVault: async (id: string): Promise<VaultStatus> =>
-    (await client.post<{ data: VaultStatus }>(`/api/v1/projects/${id}/vault/sync`)).data,
+  listTasks: (id: string): Promise<Task[]> => list<Task>(`/api/v1/projects/${id}/tasks`),
 
-  listNotes: async (id: string): Promise<Note[]> =>
-    (await client.list<Note>(`/api/v1/projects/${id}/notes`)).data,
+  // ── 볼트 ────────────────────────────────────────────────────────────
+  getVault: (id: string): Promise<VaultStatus> =>
+    get<VaultStatus>(`/api/v1/projects/${id}/vault`),
 
-  getNote: async (noteId: string): Promise<Note> =>
-    (await client.get<Note>(`/api/v1/notes/${noteId}`)).data,
+  listNotes: (id: string): Promise<Note[]> => list<Note>(`/api/v1/projects/${id}/notes`),
 
-  listMeetings: async (id: string): Promise<Meeting[]> =>
-    (await client.list<Meeting>(`/api/v1/projects/${id}/meetings`)).data,
+  getNote: (id: string, noteId: string): Promise<Note> =>
+    get<Note>(`/api/v1/projects/${id}/notes/${noteId}`),
 
-  getMeeting: async (meetingId: string): Promise<MeetingDetail> =>
-    (await client.get<MeetingDetail>(`/api/v1/meetings/${meetingId}`)).data,
+  // ── 그 밖의 화면 ────────────────────────────────────────────────────
+  listDocuments: (id: string): Promise<LepDocument[]> =>
+    list<LepDocument>(`/api/v1/projects/${id}/documents`),
 
-  applyMeeting: async (
-    meetingId: string,
-    mode: "wbs" | "vault_only" | "dismiss",
-  ): Promise<ApplyPreview> =>
-    (await client.post<{ data: ApplyPreview }>(`/api/v1/meetings/${meetingId}/apply`, { mode }))
-      .data,
+  getDrive: (id: string): Promise<DriveCategory[]> =>
+    list<DriveCategory>(`/api/v1/projects/${id}/drive`),
 
-  listDocuments: async (id: string): Promise<LepDocument[]> =>
-    (await client.list<LepDocument>(`/api/v1/projects/${id}/documents`)).data,
+  listDriveFiles: (id: string, category?: string): Promise<DriveFile[]> =>
+    list<DriveFile>(
+      `/api/v1/projects/${id}/drive/files${category ? `?category=${category}` : ""}`,
+    ),
 
-  getDocument: async (documentId: string): Promise<LepDocument> =>
-    (await client.get<LepDocument>(`/api/v1/documents/${documentId}`)).data,
+  listMail: (id: string): Promise<MailMessage[]> =>
+    list<MailMessage>(`/api/v1/projects/${id}/mail`),
 
-  retryDocument: async (documentId: string): Promise<LepDocument> =>
-    (await client.post<{ data: LepDocument }>(`/api/v1/documents/${documentId}/retry`)).data,
+  getMail: (messageId: string): Promise<MailMessage> =>
+    get<MailMessage>(`/api/v1/mail/${messageId}`),
 
-  getDrive: async (id: string): Promise<DriveCategory[]> =>
-    (await client.list<DriveCategory>(`/api/v1/projects/${id}/drive`)).data,
+  getVcs: (id: string): Promise<VcsStatus> => get<VcsStatus>(`/api/v1/projects/${id}/vcs`),
 
-  listDriveFiles: async (id: string, category?: string): Promise<DriveFile[]> =>
-    (
-      await client.list<DriveFile>(
-        `/api/v1/projects/${id}/drive/files${category ? `?category=${category}` : ""}`,
-      )
-    ).data,
+  listMismatches: (id: string): Promise<Mismatch[]> =>
+    list<Mismatch>(`/api/v1/projects/${id}/vcs/mismatches`),
 
-  listMail: async (id: string): Promise<MailMessage[]> =>
-    (await client.list<MailMessage>(`/api/v1/projects/${id}/mail`)).data,
+  listMappings: (id: string): Promise<TaskMapping[]> =>
+    list<TaskMapping>(`/api/v1/projects/${id}/vcs/mappings`),
 
-  getMail: async (messageId: string): Promise<MailDetail> =>
-    (await client.get<MailDetail>(`/api/v1/mail/${messageId}`)).data,
+  getServer: (): Promise<LlmServer> => get<LlmServer>("/api/v1/ai/server"),
 
-  promoteMailToNote: async (messageId: string): Promise<string> =>
-    (await client.post<{ data: { note_id: string } }>(
-      `/api/v1/mail/${messageId}/promote-to-note`,
-    )).data.note_id,
+  listModels: (): Promise<ProjectModel[]> => list<ProjectModel>("/api/v1/ai/models"),
 
-  applyMailToWbs: async (messageId: string): Promise<ScheduleShift[]> =>
-    (await client.post<{ data: ScheduleShift[] }>(`/api/v1/mail/${messageId}/apply-to-wbs`))
-      .data,
-
-  dismissMail: async (messageId: string): Promise<MailMessage> =>
-    (await client.post<{ data: MailMessage }>(`/api/v1/mail/${messageId}/dismiss`)).data,
-
-  getVcs: async (id: string): Promise<VcsStatus> =>
-    (await client.get<VcsStatus>(`/api/v1/projects/${id}/vcs`)).data,
-
-  syncVcs: async (id: string): Promise<VcsStatus> =>
-    (await client.post<{ data: VcsStatus }>(`/api/v1/projects/${id}/vcs/sync`)).data,
-
-  listMismatches: async (id: string): Promise<Mismatch[]> =>
-    (await client.list<Mismatch>(`/api/v1/projects/${id}/vcs/mismatches`)).data,
-
-  listMappings: async (id: string): Promise<TaskMapping[]> =>
-    (await client.list<TaskMapping>(`/api/v1/projects/${id}/vcs/mappings`)).data,
-
-  resolveMismatch: async (mismatchId: string): Promise<Mismatch> =>
-    (await client.post<{ data: Mismatch }>(`/api/v1/vcs/mismatches/${mismatchId}/resolve`)).data,
-
-  getServer: async (): Promise<LlmServer> =>
-    (await client.get<LlmServer>("/api/v1/ai/server")).data,
-
-  listModels: async (): Promise<ProjectModel[]> =>
-    (await client.list<ProjectModel>("/api/v1/ai/models")).data,
-
-  restartModel: async (id: string): Promise<ProjectModel> =>
-    (await client.post<{ data: ProjectModel }>(`/api/v1/projects/${id}/ai/restart`)).data,
-
-  listCredentials: async (id: string): Promise<Credential[]> =>
-    (await client.list<Credential>(`/api/v1/projects/${id}/integrations`)).data,
+  listCredentials: (id: string): Promise<Credential[]> =>
+    list<Credential>(`/api/v1/projects/${id}/integrations`),
 };

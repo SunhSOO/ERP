@@ -1,8 +1,4 @@
-"""Stable public interface for the mail module.
-
-Projects (the home screen) needs the unclassified count for its cards. It reads it
-through here rather than from mail's storage.
-"""
+"""Stable public interface for the mail module."""
 
 from __future__ import annotations
 
@@ -10,16 +6,16 @@ from functools import lru_cache
 
 from ...common.adapters import mail_choice
 from .application.services import MailPort, MailService
-from .infrastructure.fixtures import FixtureMailAdapter
+from .infrastructure.fixtures import EmptyMailAdapter
 from .infrastructure.hiworks_imap import HiworksMailAdapter
 
 __all__ = ["get_mail_service", "unclassified_count"]
 
 
 def _adapter() -> MailPort:
-    """Pick the mail adapter per ADR-018. Default is the fixture."""
+    """ADR-018에 따라 어댑터를 고른다. 기본은 빈 어댑터다."""
 
-    return HiworksMailAdapter.from_env() if mail_choice().use_real else FixtureMailAdapter()
+    return HiworksMailAdapter.from_env() if mail_choice().use_real else EmptyMailAdapter()
 
 
 @lru_cache(maxsize=1)
@@ -28,4 +24,6 @@ def get_mail_service() -> MailService:
 
 
 def unclassified_count(project_id: str) -> int:
+    """홈 카드가 쓰는 미분류 건수. 메일 연동이 없으면 0이다."""
+
     return get_mail_service().unclassified_count(project_id)

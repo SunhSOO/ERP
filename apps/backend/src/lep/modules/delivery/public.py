@@ -1,51 +1,62 @@
-"""Stable public interface for the delivery module.
-
-Knowledge (screen 08) and integrations (screen 07) both need to change the
-schedule. They do it through here, never by touching delivery's data.
-"""
+"""Stable public interface for the delivery module."""
 
 from __future__ import annotations
 
 from datetime import date
-from functools import lru_cache
 
-from .application.services import DeliveryService
+from sqlalchemy.orm import Session as DbSession
+
+from .application.services import DeliveryService, DeliverySummary
 from .domain.entities import ScheduleShift
-from .infrastructure.memory import InMemoryDeliveryRepository
 
 __all__ = [
+    "DeliverySummary",
     "ScheduleShift",
     "adopt_vcs_task",
+    "find_milestone_id_by_code",
     "get_delivery_service",
     "preview_milestone_shift",
+    "project_delivery_summary",
     "shift_milestone",
-    "find_milestone_id_by_code",
+    "task_codes_and_status",
 ]
 
 
-@lru_cache(maxsize=1)
-def get_delivery_service() -> DeliveryService:
-    return DeliveryService(InMemoryDeliveryRepository())
+def get_delivery_service(db: DbSession) -> DeliveryService:
+    return DeliveryService(db)
 
 
-def find_milestone_id_by_code(project_id: str, code: str) -> str | None:
-    """Resolve "M3" to a milestone ID. Screens 06 and 08 refer to milestones by code."""
+def project_delivery_summary(db: DbSession, project_id: str) -> DeliverySummary:
+    """홈 카드가 쓰는 집계. 태스크가 없으면 진행률은 ``None``이다."""
 
-    for milestone in get_delivery_service().list_milestones(project_id):
+    return DeliveryService(db).summary(project_id)
+
+
+def task_codes_and_status(db: DbSession, project_id: str) -> list[tuple[str, str, str]]:
+    """저장소 정합 계산에 넘길 ``(code, title, status)`` 목록."""
+
+    return [
+        (t.code, t.title, t.status.value)
+        for t in DeliveryService(db).list_tasks(project_id)
+    ]
+
+
+def find_milestone_id_by_code(db: DbSession, project_id: str, code: str) -> str | None:
+    for milestone in DeliveryService(db).list_milestones(project_id):
         if milestone.code == code:
             return milestone.id
     return None
 
 
-def preview_milestone_shift(milestone_id: str, new_end: date) -> list[ScheduleShift]:
-    return get_delivery_service().preview_milestone_shift(milestone_id, new_end)
+def preview_milestone_shift(
+    db: DbSession, milestone_id: str, new_end: date
+) -> list[ScheduleShift]:
+    return DeliveryService(db).preview_milestone_shift(milestone_id, new_end)
 
 
-def shift_milestone(milestone_id: str, new_end: date) -> list[ScheduleShift]:
-    return get_delivery_service().shift_milestone(milestone_id, new_end)
+def shift_milestone(db: DbSession, milestone_id: str, new_end: date) -> list[ScheduleShift]:
+    return DeliveryService(db).shift_milestone(milestone_id, new_end)
 
 
-def adopt_vcs_task(task_code: str, milestone_id: str | None = None) -> str:
-    """Promote a repository-only item to a WBS task and return its code."""
-
-    return get_delivery_service().adopt_vcs_task(task_code, milestone_id).code
+def adopt_vcs_task(db: DbSession, project_id: str, task_code: str) -> str:
+    return DeliveryService(db).adopt_vcs_task(project_id, task_code).code

@@ -13,7 +13,7 @@ export type TaskStatus =
   | "vcs_only";
 
 export type Confidence = "high" | "medium" | "low";
-export type SyncHealth = "ok" | "stale" | "mismatch" | "unknown";
+export type SyncHealth = "ok" | "stale" | "mismatch" | "unknown" | "not_configured";
 export type LinkHealth = "ok" | "stale" | "mismatch" | "expired" | "not_configured";
 export type ViewRole = "vendor" | "client";
 
@@ -24,6 +24,7 @@ export interface Project {
   customer_name: string;
   role: ViewRole;
   pm_name: string;
+  created_at: string;
 }
 
 export interface ProjectSummary {
@@ -35,6 +36,8 @@ export interface ProjectSummary {
   unclassified_mail_count: number;
   vcs_health: SyncHealth;
   vcs_note: string;
+  task_count: number;
+  statement_count: number;
 }
 
 export interface Milestone {
@@ -67,6 +70,8 @@ export interface Statement {
   clause_count: number;
   classified_count: number;
   analysed: boolean;
+  /** 파싱이 실패했으면 사유. 성공으로 숨기지 않는다. */
+  parse_error: string | null;
 }
 
 export interface Clause {
@@ -257,4 +262,27 @@ export interface Credential {
   detail: string;
   /** 실제 어댑터가 동작하려면 운영자가 넣어야 할 것. 비밀 값 자체는 담지 않는다. */
   missing_input: string | null;
+}
+
+// ── 인증 ────────────────────────────────────────────────────────────────
+
+export interface CurrentUser {
+  id: string;
+  email: string;
+  display_name: string;
+  role: "admin" | "member";
+  /** 상단바 아바타에 쓰는 한 글자. */
+  initial: string;
+}
+
+export interface SignupState {
+  /** 아직 아무도 가입하지 않았으면 다음 가입자가 관리자가 된다. */
+  first_account: boolean;
+}
+
+// ── 업로드 ──────────────────────────────────────────────────────────────
+
+export interface UploadLimits {
+  max_bytes: number;
+  suffixes: string[];
 }
