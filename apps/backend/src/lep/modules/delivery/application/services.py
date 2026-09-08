@@ -266,6 +266,13 @@ class DeliveryService:
             uploaded_at=datetime.now(tz=UTC),
         )
         self._db.add(row)
+        # 조항을 넣기 전에 statements 행을 먼저 내보낸다.
+        #
+        # 외래 키 컬럼만으로는 flush 순서가 정해지지 않는다. SQLAlchemy는
+        # relationship이 있을 때만 매퍼 사이의 의존을 안다. 여기는 얇은 행 매핑
+        # 방식이라 relationship이 없고, 그대로 두면 clauses가 먼저 나가
+        # PostgreSQL이 외래 키 위반으로 거절한다.
+        self._db.flush()
 
         for parsed in result.clauses:
             self._db.add(

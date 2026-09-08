@@ -18,7 +18,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -60,8 +60,28 @@ def engine() -> Engine:
             max_overflow=10,
             future=True,
         )
+        _enforce_sqlite_foreign_keys(_engine)
         _session_factory = sessionmaker(bind=_engine, expire_on_commit=False)
     return _engine
+
+
+def _enforce_sqlite_foreign_keys(bound: Engine) -> None:
+    """Turn on foreign key enforcement for SQLite.
+
+    SQLite ignores foreign keys unless asked, PostgreSQL never does. Left off,
+    the test suite runs on weaker rules than production and a whole class of
+    ordering bug — inserting a child before its parent — passes here and fails
+    on the server. Tests are only worth what they enforce.
+    """
+
+    if bound.dialect.name != "sqlite":
+        return
+
+    @event.listens_for(bound, "connect")
+    def _set_pragma(dbapi_connection: object, _record: object) -> None:
+        cursor = dbapi_connection.cursor()  # type: ignore[attr-defined]
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
 
 
 def session_factory() -> sessionmaker[Session]:
