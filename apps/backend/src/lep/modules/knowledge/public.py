@@ -8,13 +8,16 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from .domain.entities import StatementSection
 from .infrastructure.obsidian_vault import ObsidianVault
 
 __all__ = [
+    "StatementSection",
     "create_note_from",
     "ensure_project_vault",
     "get_vault",
     "project_vault_summary",
+    "write_statement_notes",
 ]
 
 
@@ -57,3 +60,19 @@ def create_note_from(
     """다른 모듈을 대신해 볼트에 노트를 만든다."""
 
     return get_vault().create_note(code, title=title, body=body, folder=folder)
+
+
+def write_statement_notes(
+    code: str, *, document: str, sections: list[StatementSection]
+) -> list[str]:
+    """과업지시서의 절들을 볼트에 노트로 쓴다.
+
+    delivery가 문서를 쪼갠 뒤 부른다. 볼트 쓰기가 실패해도 업로드 자체를
+    되돌리지 않는다. 파싱 결과는 데이터베이스에 남아 있고 볼트는 다시 만들 수
+    있다. 다만 조용히 넘기지 않도록 무엇을 썼는지 돌려준다.
+    """
+
+    try:
+        return get_vault().write_statement(code, document=document, sections=sections)
+    except OSError:
+        return []

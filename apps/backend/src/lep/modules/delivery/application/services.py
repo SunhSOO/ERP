@@ -21,6 +21,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DbSession
 
 from ....common.problems import ProblemError, not_found, state_conflict
+from ...knowledge.public import StatementSection, write_statement_notes
 from ...projects.public import require_project
 from ..domain.entities import (
     Clause,
@@ -288,6 +289,26 @@ class DeliveryService:
                 )
             )
         self._db.flush()
+
+        # 규칙으로 뽑은 절을 볼트에 노트로 남긴다. 사람이 옵시디언에서 바로
+        # 열어 읽고 메모를 붙일 수 있어야 문서가 지식이 된다. 여기서 실패해도
+        # 업로드를 되돌리지 않는다. 파싱 결과는 이미 데이터베이스에 있다.
+        if result.clauses:
+            write_statement_notes(
+                project.code,
+                document=Path(clean).stem,
+                sections=[
+                    StatementSection(
+                        number=c.article,
+                        title=c.text,
+                        body=c.body,
+                        level=c.level,
+                        parent=c.parent,
+                    )
+                    for c in result.clauses
+                ],
+            )
+
         return _to_statement(row)
 
     # ── writes ─────────────────────────────────────────────────────────────

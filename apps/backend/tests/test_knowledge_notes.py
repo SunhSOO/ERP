@@ -87,3 +87,119 @@ def test_writing_a_note_requires_a_session(client: Any, project: dict[str, Any])
 
     assert response.status_code == 401
     assert response.json()["code"] == "AUTHENTICATION_REQUIRED"
+
+
+# ── 과업지시서 → 볼트 노트 ────────────────────────────────────────────────
+
+STATEMENT = """1.과업의 개요
+
+1.1과업명
+
+O정수장 데이터 전처리 및 AI 개발 용역
+
+1.2 과업 목적
+
+ㅇ운영상태를 실시간으로 분석한다
+
+2.과업수행 일반사항
+
+2.1 보안사항
+
+O산출물은 외부로 반출하지 않는다
+"""
+
+
+def _upload(client: Any, project: dict[str, Any], name: str = "과업지시서.md") -> dict[str, Any]:
+    response = client.post(
+        f"/api/v1/projects/{project['id']}/statements",
+        files={"file": (name, STATEMENT.encode("utf-8"), "text/markdown")},
+    )
+    assert response.status_code == 201, response.text
+    return dict(response.json()["data"])
+
+
+def test_uploading_a_statement_writes_one_note_per_section(
+    client: Any, project: dict[str, Any], env: Path
+) -> None:
+    """규칙으로 뽑은 절이 곧 볼트의 노트가 된다."""
+
+    _upload(client, project)
+
+    folder = env / "vault" / project["code"] / "statements" / "과업지시서"
+    titles = {p.stem for p in folder.glob("*.md")}
+
+    assert "과업지시서 1 과업의 개요" in titles
+    assert "과업지시서 1.1 과업명" in titles
+    assert "과업지시서 2.1 보안사항" in titles
+    assert "과업지시서 목차" in titles
+
+
+def test_a_section_note_links_to_its_parent(
+    client: Any, project: dict[str, Any], env: Path
+) -> None:
+    """옵시디언의 백링크가 문서 구조를 그대로 보여 주어야 한다."""
+
+    _upload(client, project)
+    folder = env / "vault" / project["code"] / "statements" / "과업지시서"
+
+    child = (folder / "과업지시서 1.1 과업명.md").read_text(encoding="utf-8")
+    assert "상위: [[과업지시서 1 과업의 개요]]" in child
+
+    parent = (folder / "과업지시서 1 과업의 개요.md").read_text(encoding="utf-8")
+    assert "[[과업지시서 1.1 과업명]]" in parent
+    assert "[[과업지시서 1.2 과업 목적]]" in parent
+
+
+def test_the_section_body_reaches_the_note(
+    client: Any, project: dict[str, Any], env: Path
+) -> None:
+    folder = env / "vault" / project["code"] / "statements" / "과업지시서"
+    _upload(client, project)
+
+    note = (folder / "과업지시서 2.1 보안사항.md").read_text(encoding="utf-8")
+    assert "외부로 반출하지 않는다" in note
+
+
+def test_the_notes_show_up_in_the_vault_listing(
+    client: Any, project: dict[str, Any]
+) -> None:
+    """볼트 화면이 이 노트들을 읽을 수 있어야 한다."""
+
+    _upload(client, project)
+
+    notes = client.get(f"/api/v1/projects/{project['id']}/notes").json()["data"]
+    statement_notes = [n for n in notes if n["source"] == "statement"]
+
+    assert len(statement_notes) >= 5
+    assert all(n["source"] == "statement" for n in statement_notes)
+
+
+def test_reparsing_the_same_document_does_not_duplicate_notes(
+    client: Any, project: dict[str, Any], env: Path
+) -> None:
+    """같은 문서를 다시 올려도 노트가 두 벌이 되지 않는다."""
+
+    _upload(client, project)
+    folder = env / "vault" / project["code"] / "statements" / "과업지시서"
+    first = sorted(p.name for p in folder.glob("*.md"))
+
+    _upload(client, project)
+
+    assert sorted(p.name for p in folder.glob("*.md")) == first
+
+
+def test_a_note_written_by_a_person_is_not_overwritten(
+    client: Any, project: dict[str, Any], env: Path
+) -> None:
+    """볼트는 사용자의 것이다. 재파싱이 사람의 메모를 지우지 않는다."""
+
+    folder = env / "vault" / project["code"] / "statements" / "과업지시서"
+    folder.mkdir(parents=True, exist_ok=True)
+    mine = folder / "과업지시서 1.1 과업명.md"
+    mine.write_text("내가 직접 쓴 메모다.", encoding="utf-8")
+
+    _upload(client, project)
+
+    assert mine.read_text(encoding="utf-8") == "내가 직접 쓴 메모다."
+    # 대신 옆에 자동 생성본이 생긴다. 조용히 버리지 않는다.
+    assert (folder / "과업지시서 1.1 과업명 (자동).md").is_file()

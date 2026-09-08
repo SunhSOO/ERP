@@ -109,7 +109,9 @@ def test_article_body_spanning_several_lines_is_joined() -> None:
 def test_outline_form_is_used_when_there_are_no_articles() -> None:
     clauses = split_clauses("1. 요구사항 정의를 수행한다.\n2. 설계 문서를 제출한다.\n")
 
-    assert [c.article for c in clauses] == ["1.", "2."]
+    # 번호에 끝점을 붙이지 않는다. `1.1`에는 끝점이 없어서, 붙이면 같은 문서
+    # 안에서 `1.`과 `1.1`이 다른 규칙으로 이름 붙는다.
+    assert [c.article for c in clauses] == ["1", "2"]
 
 
 def test_plain_prose_yields_no_clauses() -> None:
