@@ -29,7 +29,7 @@ from lep.modules.integrations.infrastructure.github_vcs import (
 )
 from lep.modules.knowledge.domain.entities import NoteSource
 from lep.modules.knowledge.infrastructure.obsidian_vault import ObsidianVault
-from lep.modules.mail.infrastructure.hiworks_imap import HiworksMailAdapter, decode
+from lep.modules.mail.infrastructure.hiworks_pop3 import HiworksMailAdapter, decode
 
 # ── 어댑터 선택 ──────────────────────────────────────────────────────────
 
@@ -387,8 +387,8 @@ def test_creating_a_note_never_overwrites_existing_text(tmp_path: Path) -> None:
 
 def _hiworks() -> HiworksMailAdapter:
     return HiworksMailAdapter(
-        host="imap.invalid",
-        port=993,
+        host="pop3.invalid",
+        port=995,
         user="pm@example.invalid",
         password="not-a-real-password",
         domains={"daon-corp.example": "prj-daon"},
@@ -413,7 +413,7 @@ def test_korean_subject_headers_are_decoded() -> None:
 
 def test_sender_domain_decides_the_project() -> None:
     parsed = _hiworks()._to_message(
-        _raw_mail("자료 공유", "이서영 <lee@daon-corp.example>", "첨부드립니다.")
+        _raw_mail("자료 공유", "이서영 <lee@daon-corp.example>", "첨부드립니다."), "uid-001"
     )
 
     assert parsed is not None
@@ -423,7 +423,7 @@ def test_sender_domain_decides_the_project() -> None:
 
 def test_unknown_domain_is_marked_unrelated() -> None:
     parsed = _hiworks()._to_message(
-        _raw_mail("정기 점검 안내", "총무팀 <admin@other.invalid>", "안내드립니다.")
+        _raw_mail("정기 점검 안내", "총무팀 <admin@other.invalid>", "안내드립니다."), "uid-001"
     )
 
     assert parsed is not None
@@ -439,7 +439,7 @@ def test_schedule_wording_is_detected_but_never_claimed_as_certain() -> None:
             "M3 검수 일정 관련",
             "이서영 <lee@daon-corp.example>",
             "일정 변경을 요청드립니다. 1주 연기 부탁드립니다.",
-        )
+        ), "uid-001"
     )
 
     assert parsed is not None
@@ -449,12 +449,18 @@ def test_schedule_wording_is_detected_but_never_claimed_as_certain() -> None:
     assert parsed.milestone_code == "M3"
 
 
-def test_message_without_an_id_is_skipped() -> None:
+def test_a_message_without_a_message_id_header_still_has_an_identity() -> None:
+    """POP3의 UIDL이 식별자다. Message-ID 헤더는 선택 사항이라 없는 메일이 있고,
+    그것을 식별자로 쓰면 그런 메일만 조용히 목록에서 사라진다."""
+
     message = EmailMessage()
     message["From"] = "lee@daon-corp.example"
     message["Subject"] = "제목"
 
-    assert _hiworks()._to_message(message) is None
+    parsed = _hiworks()._to_message(message, "uid-042")
+
+    assert parsed is not None
+    assert parsed.id == "uid-042"
 
 
 def test_workflow_state_is_kept_as_an_overlay_not_written_to_the_server() -> None:
@@ -462,7 +468,7 @@ def test_workflow_state_is_kept_as_an_overlay_not_written_to_the_server() -> Non
 
     adapter = _hiworks()
     original = adapter._to_message(
-        _raw_mail("자료 공유", "이서영 <lee@daon-corp.example>", "첨부드립니다.")
+        _raw_mail("자료 공유", "이서영 <lee@daon-corp.example>", "첨부드립니다."), "uid-001"
     )
     assert original is not None
 
@@ -470,3 +476,24 @@ def test_workflow_state_is_kept_as_an_overlay_not_written_to_the_server() -> Non
 
     assert adapter._with_overlay(original).handled is True
     assert adapter._with_overlay(original).note_id == "note-1"
+
+
+def test_the_adapter_never_sends_a_command_that_can_delete_mail() -> None:
+    """IMAP에서 실수는 플래그를 건드리지만 POP3에서는 메일을 없앤다.
+
+    이건 사용자의 실제 업무 메일함이고 POP3의 삭제는 되돌릴 수 없다. 그래서
+    보내는 명령을 소스에서 직접 확인한다. 나중에 누가 편의를 위해 dele를
+    넣으면 여기서 걸린다.
+    """
+
+    from pathlib import Path
+
+    import lep.modules.mail.infrastructure.hiworks_pop3 as adapter_module
+
+    source = Path(adapter_module.__file__).read_text(encoding="utf-8")
+
+    assert ".dele(" not in source
+    assert "client.dele" not in source
+    # 반대로 RSET은 반드시 있어야 한다. QUIT이 삭제를 확정하는 프로토콜에서
+    # 삭제 표시를 되돌리는 값싼 보험이다.
+    assert "client.rset()" in source

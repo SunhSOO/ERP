@@ -71,11 +71,10 @@ services:
 
       # ── 하이웍스 메일 ──────────────────────────────────────────────────
       LEP_ADAPTER_MAIL: ${LEP_ADAPTER_MAIL:-fixture}
-      LEP_HIWORKS_HOST: ${LEP_HIWORKS_HOST:-imaps.hiworks.com}
-      LEP_HIWORKS_PORT: ${LEP_HIWORKS_PORT:-993}
+      LEP_HIWORKS_HOST: ${LEP_HIWORKS_HOST:-pop3s.hiworks.com}
+      LEP_HIWORKS_PORT: ${LEP_HIWORKS_PORT:-995}
       LEP_HIWORKS_USER: ${LEP_HIWORKS_USER:-}
       LEP_HIWORKS_PASSWORD: ${LEP_HIWORKS_PASSWORD:-}
-      LEP_HIWORKS_FOLDER: ${LEP_HIWORKS_FOLDER:-INBOX}
       LEP_HIWORKS_PROJECT_DOMAINS: ${LEP_HIWORKS_PROJECT_DOMAINS:-}
 
       # ── 로컬 LLM ───────────────────────────────────────────────────────

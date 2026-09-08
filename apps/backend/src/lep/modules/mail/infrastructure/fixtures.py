@@ -4,7 +4,7 @@ There is no seeded mail. Until a Hiworks account is configured the mailbox is
 genuinely empty, and the screen says so rather than showing invented messages.
 
 Configuring `LEP_ADAPTER_MAIL=hiworks` swaps this for the IMAP adapter, which
-reads the real mailbox. See `hiworks_imap.py`.
+reads the real mailbox. See `hiworks_pop3.py`.
 """
 
 from __future__ import annotations
