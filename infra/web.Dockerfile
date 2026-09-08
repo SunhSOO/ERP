@@ -35,7 +35,18 @@ ARG NEXT_PUBLIC_LEP_MOCK_SCREENS=1
 ENV NEXT_PUBLIC_LEP_MOCK_SCREENS=${NEXT_PUBLIC_LEP_MOCK_SCREENS} \
     NEXT_TELEMETRY_DISABLED=1
 
-RUN pnpm --filter @lep/web build
+# 독립 실행형 출력은 여기서만 켠다. next.config.ts가 이 변수를 보고 결정한다.
+# 개발 장비의 윈도우에서는 pnpm 워크스페이스의 심링크 권한 때문에 실패하므로
+# 항상 켜 둘 수 없다. 이 줄이 없으면 아래 런타임 단계의 .next/standalone 복사가
+# "failed to compute cache key: not found"로 죽는다.
+ENV LEP_BUILD_STANDALONE=1
+
+# 빌드 직후 산출물을 확인한다. 없으면 여기서 죽어야 한다. 다음 단계의
+# COPY 실패 메시지보다 여기 메시지가 원인을 훨씬 잘 말해 준다.
+# WORKDIR은 /repo이고 standalone은 워크스페이스 루트 기준으로 펼쳐진다.
+RUN pnpm --filter @lep/web build \
+    && test -f apps/web/.next/standalone/apps/web/server.js \
+    || (echo "standalone 출력이 없다. LEP_BUILD_STANDALONE을 확인하라." >&2; exit 1)
 
 # ── 런타임 ───────────────────────────────────────────────────────────────
 FROM node:22-bookworm-slim AS runtime
