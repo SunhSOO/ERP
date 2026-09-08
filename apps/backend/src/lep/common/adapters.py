@@ -179,11 +179,11 @@ def llm_model() -> str | None:
 
 
 def llm_timeout_seconds() -> int:
-    raw = os.getenv("LEP_LLM_TIMEOUT_SECONDS", "120")
+    raw = os.getenv("LEP_LLM_TIMEOUT_SECONDS", "180")
     try:
         return max(10, int(raw))
     except ValueError:
-        return 120
+        return 180
 
 
 def llm_choice() -> AdapterChoice:
