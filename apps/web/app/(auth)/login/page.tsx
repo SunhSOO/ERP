@@ -7,7 +7,12 @@ import { AuthForm } from "@/src/widgets/auth/AuthForm";
 
 export const dynamic = "force-dynamic";
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>;
+}) {
+  const { next } = await searchParams;
   // 이미 로그인한 사람에게 로그인 화면을 보여 주지 않는다.
   if (await gateway.me()) redirect("/home");
 
@@ -23,6 +28,8 @@ export default async function LoginPage() {
       </div>
 
       <AuthForm action={loginAction} submitLabel="로그인">
+        {/* 미들웨어가 남긴 원래 목적지. 값 검사는 서버 액션이 한다. */}
+        <input name="next" type="hidden" value={next ?? "/home"} />
         <InputField
           autoComplete="email"
           label="이메일"
@@ -40,7 +47,10 @@ export default async function LoginPage() {
       </AuthForm>
 
       <p className="text-muted m-0 text-[12.5px]">
-        계정이 없나요? <Link href="/signup">가입하기</Link>
+        계정이 없나요?{" "}
+        <Link href={next ? `/signup?next=${encodeURIComponent(next)}` : "/signup"}>
+          가입하기
+        </Link>
       </p>
     </>
   );

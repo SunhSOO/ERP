@@ -7,7 +7,12 @@ import { AuthForm } from "@/src/widgets/auth/AuthForm";
 
 export const dynamic = "force-dynamic";
 
-export default async function SignupPage() {
+export default async function SignupPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>;
+}) {
+  const { next } = await searchParams;
   if (await gateway.me()) redirect("/home");
 
   const { first_account } = await gateway.signupState();
@@ -24,6 +29,7 @@ export default async function SignupPage() {
       </div>
 
       <AuthForm action={signupAction} submitLabel="가입하고 시작하기">
+        <input name="next" type="hidden" value={next ?? "/home"} />
         <InputField
           autoComplete="email"
           label="이메일"
@@ -50,7 +56,10 @@ export default async function SignupPage() {
       </AuthForm>
 
       <p className="text-muted m-0 text-[12.5px]">
-        이미 계정이 있나요? <Link href="/login">로그인</Link>
+        이미 계정이 있나요?{" "}
+        <Link href={next ? `/login?next=${encodeURIComponent(next)}` : "/login"}>
+          로그인
+        </Link>
       </p>
     </>
   );

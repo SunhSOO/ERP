@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { ApiProblem, ApiUnreachable } from "@lep/api-client";
+import { safeRedirectTarget } from "./redirect-target";
 
 const BASE_URL = process.env.LEP_API_BASE_URL ?? "http://127.0.0.1:8000";
 const SESSION_COOKIE = "lep_session";
@@ -118,7 +119,7 @@ export async function signupAction(
     return { ok: true, message: "가입했습니다." };
   });
 
-  if (result.ok) redirect("/home");
+  if (result.ok) redirect(safeRedirectTarget(form.get("next")));
   return result;
 }
 
@@ -138,7 +139,7 @@ export async function loginAction(
     return { ok: true, message: "로그인했습니다." };
   });
 
-  if (result.ok) redirect("/home");
+  if (result.ok) redirect(safeRedirectTarget(form.get("next")));
   return result;
 }
 
