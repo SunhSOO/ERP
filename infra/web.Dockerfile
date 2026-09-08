@@ -30,10 +30,7 @@ FROM deps AS build
 COPY packages ./packages
 COPY apps/web ./apps/web
 
-# 이 값들은 빌드 시점에 번들에 박힌다. 런타임 변수로는 바꿀 수 없다.
-ARG NEXT_PUBLIC_LEP_MOCK_SCREENS=1
-ENV NEXT_PUBLIC_LEP_MOCK_SCREENS=${NEXT_PUBLIC_LEP_MOCK_SCREENS} \
-    NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_TELEMETRY_DISABLED=1
 
 # 독립 실행형 출력은 여기서만 켠다. next.config.ts가 이 변수를 보고 결정한다.
 # 개발 장비의 윈도우에서는 pnpm 워크스페이스의 심링크 권한 때문에 실패하므로

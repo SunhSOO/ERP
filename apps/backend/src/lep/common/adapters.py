@@ -158,3 +158,33 @@ def mail_choice() -> AdapterChoice:
             "LEP_HIWORKS_PASSWORD": hiworks_password(),
         },
     )
+
+# ── 로컬 LLM ──────────────────────────────────────────────────────────────
+
+
+def llm_base_url() -> str:
+    """OpenAI 호환 엔드포인트. compose의 ollama가 기본값이다."""
+
+    return os.getenv("LEP_LLM_BASE_URL", "http://ollama:11434/v1").rstrip("/")
+
+
+def llm_model() -> str | None:
+    """쓸 모델 이름. 없으면 실제 어댑터를 켜지 않는다.
+
+    기본값을 두지 않는다. 서버에 없는 모델 이름을 몰래 고르면 첫 분류 요청에서야
+    404가 나고, 그때는 왜 실패했는지 화면에서 알 길이 없다.
+    """
+
+    return os.getenv("LEP_LLM_MODEL") or None
+
+
+def llm_timeout_seconds() -> int:
+    raw = os.getenv("LEP_LLM_TIMEOUT_SECONDS", "120")
+    try:
+        return max(10, int(raw))
+    except ValueError:
+        return 120
+
+
+def llm_choice() -> AdapterChoice:
+    return _select("LEP_ADAPTER_LLM", "ollama", {"LEP_LLM_MODEL": llm_model()})

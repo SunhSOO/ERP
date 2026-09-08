@@ -1,13 +1,10 @@
 """Shared test fixtures.
 
-The in-memory adapters keep their data in module-level containers, and the write
-endpoints mutate it on purpose so the screens are genuinely interactive. That
-makes tests order-dependent unless the state is restored between them.
-
-Rather than adding a bespoke ``reset()`` to every adapter, this snapshots the
-mutable module-level containers and restores them around each test. When
-WP-PKD-020 swaps in PostgreSQL, this fixture becomes a transaction rollback and
-the tests themselves do not change.
+Each test gets a fresh SQLite database and a fresh vault directory, so nothing
+carries between tests and no test can pass because a previous one left data
+behind. SQLite stands in for PostgreSQL: every column type used is portable, and
+timestamps are normalised on read (``common.db.as_utc``), which is the one place
+the two databases differ in a way the code notices.
 
 Every import of application code is deferred into a fixture body. Importing the
 FastAPI app at conftest scope would configure logging before pytest has finished
@@ -18,60 +15,78 @@ was given.
 from __future__ import annotations
 
 from collections.abc import Iterator
-from importlib import import_module
-from types import ModuleType
+from pathlib import Path
 from typing import Any
 
 import pytest
 
-FIXTURE_MODULES = (
-    "lep.modules.projects.infrastructure.memory",
-    "lep.modules.delivery.infrastructure.memory",
-    "lep.modules.knowledge.infrastructure.fixture_vault",
-    "lep.modules.documents.infrastructure.fixtures",
-    "lep.modules.mail.infrastructure.fixtures",
-    "lep.modules.integrations.infrastructure.fixtures",
-)
 
+@pytest.fixture
+def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Point the application at throwaway storage."""
 
-def _mutable_containers(module: ModuleType) -> list[list[Any] | dict[Any, Any]]:
-    # Dunder names must be excluded, not just skipped for tidiness: ``vars()``
-    # includes ``__builtins__``, which is a dict. Clearing that one detonates the
-    # interpreter rather than failing a test.
-    return [
-        value
-        for name, value in vars(module).items()
-        if name.startswith("_")
-        and not name.startswith("__")
-        and isinstance(value, list | dict)
-    ]
+    monkeypatch.setenv("LEP_DATABASE_URL", f"sqlite:///{tmp_path / 'test.db'}")
+    monkeypatch.setenv("LEP_OBSIDIAN_VAULT", str(tmp_path / "vault"))
+    monkeypatch.setenv("LEP_UPLOAD_DIR", str(tmp_path / "uploads"))
+    # 어댑터는 전부 기본값(픽스처/빈 값)으로 둔다. 테스트가 외부를 부르지 않는다.
+    for name in ("VCS", "VAULT", "MAIL", "CONVERTER", "LLM"):
+        monkeypatch.delenv(f"LEP_ADAPTER_{name}", raising=False)
+    return tmp_path
 
 
 @pytest.fixture
-def client() -> Iterator[Any]:
-    """A TestClient over a fresh app, with fixture data restored afterwards.
-
-    Entities are frozen dataclasses, so a shallow copy of each container is a
-    complete snapshot.
-    """
+def client(env: Path) -> Iterator[Any]:
+    """A TestClient over a fresh app with an empty database."""
 
     from fastapi.testclient import TestClient
 
+    import lep.common.db as db_module
     from lep.bootstrap.app import create_app
+    from lep.common.schema import create_all
 
-    snapshots: list[tuple[list[Any] | dict[Any, Any], list[Any] | dict[Any, Any]]] = []
-    for path in FIXTURE_MODULES:
-        for container in _mutable_containers(import_module(path)):
-            snapshots.append((container, container.copy()))
+    # 엔진은 프로세스 전역이라 테스트마다 다시 만들어야 한다.
+    db_module._engine = None
+    db_module._session_factory = None
 
-    # Deliberately not used as a context manager. Entering it runs the app's
-    # lifespan on a portal thread, which does not shut down cleanly here and
-    # takes the interpreter down with it. Nothing in this track uses lifespan.
+    # knowledge 모듈의 볼트는 lru_cache로 잡혀 있다. 새 경로를 쓰도록 비운다.
+    from lep.modules.knowledge.public import get_vault
+    from lep.modules.mail.public import get_mail_service
+
+    get_vault.cache_clear()
+    get_mail_service.cache_clear()
+
+    create_all()
+
+    # 라이프사이클을 켜지 않는다. 여기서 정리되지 않아 인터프리터를 데려간다.
     yield TestClient(create_app())
 
-    for container, snapshot in snapshots:
-        container.clear()
-        if isinstance(container, list):
-            container.extend(snapshot)
-        else:
-            container.update(snapshot)
+    db_module._engine = None
+    db_module._session_factory = None
+
+
+@pytest.fixture
+def signed_up(client: Any) -> dict[str, str]:
+    """가입한 첫 사용자. 세션 쿠키가 클라이언트에 남는다."""
+
+    response = client.post(
+        "/api/v1/auth/signup",
+        json={
+            "email": "pm@example.invalid",
+            "display_name": "김서준",
+            "password": "correct-horse-battery",
+        },
+    )
+    assert response.status_code == 201, response.text
+    return dict(response.json()["data"])
+
+
+@pytest.fixture
+def project(client: Any, signed_up: dict[str, str]) -> dict[str, Any]:
+    """로그인한 사용자가 만든 프로젝트 하나."""
+
+    response = client.post(
+        "/api/v1/projects",
+        json={"name": "테스트 프로젝트", "code": "TEST-1", "customer_name": "고객사"},
+    )
+    assert response.status_code == 201, response.text
+    return dict(response.json()["data"])

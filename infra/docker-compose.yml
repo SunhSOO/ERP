@@ -8,16 +8,48 @@
 name: luminode
 
 services:
+  # 계정과 프로젝트가 재시작을 넘어 남아야 한다. 이 서비스가 없으면 로그인이
+  # 무의미하다. 포트를 호스트에 내지 않으므로 api만 닿는다.
+  db:
+    image: postgres:16-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: lep
+      POSTGRES_USER: lep
+      POSTGRES_PASSWORD: ${LEP_DB_PASSWORD:?infra/.env에 LEP_DB_PASSWORD를 넣어라. deploy.sh가 만들어 준다.}
+      # 한국어 데이터를 다룬다. 초기화 시점의 인코딩을 고정한다.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - lep
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lep -d lep"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
   api:
     build:
       context: ..
       dockerfile: infra/api.Dockerfile
     image: luminode/api:local
     restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
     environment:
       LEP_ENV: production
       LEP_SERVICE_NAME: lep-api
       LEP_LOG_LEVEL: ${LEP_LOG_LEVEL:-INFO}
+
+      # ── 영속성 ─────────────────────────────────────────────────────────
+      LEP_DATABASE_URL: postgresql+psycopg://lep:${LEP_DB_PASSWORD:?}@db:5432/lep
+      # 올린 과업지시서 원본이 여기 남는다. 파싱은 다시 돌릴 수 있어야 한다.
+      LEP_UPLOAD_DIR: /data/uploads
 
       # ── 문서 변환 ──────────────────────────────────────────────────────
       # kordoc은 이미지 안에 설치돼 있다. 한컴 오피스는 필요 없다.
@@ -34,8 +66,8 @@ services:
       # ── 옵시디언 볼트 ──────────────────────────────────────────────────
       # 서버에 옵시디언 앱을 깔 필요가 없다. 볼트는 마크다운 폴더일 뿐이다.
       LEP_ADAPTER_VAULT: ${LEP_ADAPTER_VAULT:-fixture}
+      # 프로젝트마다 이 아래에 코드 이름의 폴더가 하나씩 생긴다.
       LEP_OBSIDIAN_VAULT: /data/vault
-      LEP_OBSIDIAN_PROJECT_DIRS: ${LEP_OBSIDIAN_PROJECT_DIRS:-}
 
       # ── 하이웍스 메일 ──────────────────────────────────────────────────
       LEP_ADAPTER_MAIL: ${LEP_ADAPTER_MAIL:-fixture}
@@ -47,13 +79,18 @@ services:
       LEP_HIWORKS_PROJECT_DOMAINS: ${LEP_HIWORKS_PROJECT_DOMAINS:-}
 
       # ── 로컬 LLM ───────────────────────────────────────────────────────
-      # 어댑터는 WP-PKD-033이다. ollama 프로파일로 서버만 미리 띄울 수 있다.
+      # 과업지시서 조항 분류에 쓴다. 문서가 사내를 벗어나지 않는다.
+      # 모델 이름이 없으면 실제 어댑터를 켜지 않는다. 없는 모델을 몰래 고르면
+      # 첫 분류 요청에서야 404가 나고 화면에서 사유를 알 수 없다.
       LEP_ADAPTER_LLM: ${LEP_ADAPTER_LLM:-fixture}
       LEP_LLM_BASE_URL: ${LEP_LLM_BASE_URL:-http://ollama:11434/v1}
+      LEP_LLM_MODEL: ${LEP_LLM_MODEL:-}
+      LEP_LLM_TIMEOUT_SECONDS: ${LEP_LLM_TIMEOUT_SECONDS:-120}
     volumes:
       # 볼트는 읽고 쓴다. 회의록과 메일을 지식화하면 여기에 파일이 생긴다.
       - ${LEP_VAULT_HOST_PATH:-./vault}:/data/vault
       - kordoc-out:/data/kordoc-out
+      - uploads:/data/uploads
     networks:
       - lep
     # 포트를 호스트로 내보내지 않는다. 웹만 api에 닿으면 된다.
@@ -64,8 +101,6 @@ services:
     build:
       context: ..
       dockerfile: infra/web.Dockerfile
-      args:
-        NEXT_PUBLIC_LEP_MOCK_SCREENS: "1"
     image: luminode/web:local
     restart: unless-stopped
     depends_on:
@@ -84,7 +119,9 @@ services:
   # 선택. `docker compose --profile llm up -d`로 함께 띄운다.
   # OpenAI 호환 엔드포인트를 내므로 WP-PKD-033 어댑터가 붙는 즉시 연결된다.
   ollama:
-    image: ollama/ollama:0.5.7
+    # RTX 5090은 Blackwell(sm_120)이다. CUDA 12.8 이상을 담은 빌드여야
+    # GPU를 쓴다. 0.5.7은 그보다 앞선 버전이라 CPU로 떨어진다.
+    image: ollama/ollama:0.33.3
     profiles: ["llm"]
     restart: unless-stopped
     volumes:
@@ -108,5 +145,7 @@ networks:
     driver: bridge
 
 volumes:
+  pgdata:
+  uploads:
   kordoc-out:
   ollama:

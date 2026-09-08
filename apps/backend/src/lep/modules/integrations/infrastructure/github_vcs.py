@@ -22,7 +22,6 @@ from datetime import UTC, datetime
 import httpx
 
 from ....common.adapters import github_api_base, github_repos, github_token
-from ...delivery.public import get_delivery_service
 from ..domain.entities import (
     Credential,
     LinkHealth,
@@ -377,10 +376,10 @@ class GitHubIntegrationAdapter:
         if repo is None:
             return None
 
-        tasks = [
-            (task.code, task.title, task.status.value)
-            for task in get_delivery_service().list_tasks(project_id)
-        ]
+        # WBS 태스크는 delivery 모듈이 소유한다. 데이터베이스 세션이 필요하므로
+        # 저장소 정합 계산은 요청 경로에서 세션과 함께 호출돼야 한다.
+        # 프로젝트별 저장소 설정이 들어오는 WP-PKD-041에서 배선한다.
+        tasks: list[tuple[str, str, str]] = []
         activity = self.github.fetch_activity(repo)
         result = self.github.reconcile(project_id, repo, activity, tasks)
         self._cache[project_id] = result

@@ -45,8 +45,9 @@ corepack pnpm build
 전체를 한 번에 돌리는 명령은 `scripts/verify.sh`와 `scripts/verify.ps1`이다. 두
 스크립트와 `.gitlab-ci.yml`은 서로 동작이 같아야 한다.
 
-현재 단계는 PostgreSQL, Redis, MinIO, Docker, 인증이 필요 없다. 데이터는 백엔드의
-인메모리 픽스처에서 온다. ADR-018 참조.
+계정과 프로젝트는 데이터베이스에 남는다. 개발 장비에서는 SQLite로 충분하고,
+서버는 `infra/docker-compose.yml`이 PostgreSQL을 띄운다. Redis와 MinIO는 아직
+쓰지 않는다. 외부 연동은 ADR-018의 포트와 어댑터를 따른다.
 
 ## 애플리케이션 실행
 
@@ -57,22 +58,28 @@ uv run uvicorn lep.bootstrap.app:app --app-dir apps/backend/src --reload
 corepack pnpm --filter @lep/web dev
 ```
 
-프론트엔드는 `NEXT_PUBLIC_LEP_MOCK_SCREENS=1`이 있어야 목업 화면이 열린다.
-`.env.example`을 참고해 `apps/web/.env.local`을 만든다.
+`.env.example`을 참고해 `.env`와 `apps/web/.env.local`을 만든다. 백엔드는
+`LEP_DATABASE_URL`이 없으면 뜨지 않는다. 어느 저장소에 쓰는지 추측하지 않는다.
 
-주요 경로는 다음과 같다.
+첫 접속은 가입 화면으로 간다. 이 서버의 **첫 계정이 관리자**가 되고, 이후 가입은
+누구나 할 수 있다. 프로젝트는 하나도 없는 상태로 시작하며, 만들면 지식 볼트에
+프로젝트 코드 이름의 폴더가 하나 생긴다.
+
+주요 경로는 다음과 같다. `<id>`는 만든 프로젝트의 식별자다.
 
 ```text
+/signup                                 가입 (첫 계정이 관리자)
+/login                                  로그인
 /home                                   통합 홈
-/projects/prj-daon/wbs                  WBS·일정
-/projects/prj-daon/tasks                과업지시서·태스크
-/projects/prj-daon/vault                지식 볼트
-/projects/prj-daon/documents            문서 생성·변환
-/projects/prj-daon/drive                프로젝트 드라이브
-/projects/prj-daon/mail                 메일함
-/projects/prj-daon/github               깃허브 연동
-/projects/prj-daon/meetings             회의록
-/projects/prj-daon/settings/ai          AI·로컬 LLM 설정
+/projects/<id>/wbs                      WBS·일정
+/projects/<id>/tasks                    과업지시서·태스크
+/projects/<id>/vault                    지식 볼트
+/projects/<id>/documents                문서 생성·변환
+/projects/<id>/drive                    프로젝트 드라이브
+/projects/<id>/mail                     메일함
+/projects/<id>/github                   깃허브 연동
+/projects/<id>/meetings                 회의록
+/projects/<id>/settings/ai              AI·로컬 LLM 설정
 /dev/components                         컴포넌트 갤러리 (개발 전용)
 /dev/states                             화면 상태 전시 (개발 전용)
 ```

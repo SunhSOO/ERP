@@ -24,6 +24,7 @@ const SYNC_HEALTH: Record<SyncHealth, StatusTone> = {
   stale: "warning",
   mismatch: "danger",
   unknown: "idle",
+  not_configured: "idle",
 };
 
 export function syncTone(health: SyncHealth): StatusTone {

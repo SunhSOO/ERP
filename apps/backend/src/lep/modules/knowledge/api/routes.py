@@ -1,16 +1,26 @@
-"""Knowledge HTTP routes: vault, notes, meetings."""
+"""Knowledge HTTP routes: the project vault and its notes.
+
+Meetings are not seeded. A project has none until someone records one, and the
+screen shows an empty state rather than invented rows. Meeting capture is its
+own work package.
+"""
 
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Annotated
 
-from fastapi import APIRouter
-from pydantic import BaseModel, ConfigDict
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy.orm import Session as DbSession
 
+from ....common.db import get_session
 from ....common.envelope import Envelope, ListEnvelope, collection, single
-from ..application.services import ApplyMode, ApplyPreview
-from ..domain.entities import ActionItem, Decision, Meeting, Note, VaultStatus
-from ..public import get_knowledge_service
+from ....common.problems import not_found
+from ...iam.public import CurrentUser
+from ...projects.public import require_project
+from ..domain.entities import Note, VaultStatus
+from ..public import get_vault
 
 router = APIRouter(prefix="/api/v1", tags=["knowledge"])
 
@@ -25,13 +35,10 @@ class VaultStatusOut(BaseModel):
     vault_path: str
 
     @classmethod
-    def of(cls, item: VaultStatus) -> VaultStatusOut:
+    def of(cls, v: VaultStatus) -> VaultStatusOut:
         return cls(
-            project_id=item.project_id,
-            health=item.health.value,
-            last_sync_at=item.last_sync_at,
-            note_count=item.note_count,
-            vault_path=item.vault_path,
+            project_id=v.project_id, health=v.health.value, last_sync_at=v.last_sync_at,
+            note_count=v.note_count, vault_path=v.vault_path,
         )
 
 
@@ -56,180 +63,79 @@ class NoteOut(BaseModel):
     task_code: str | None
 
     @classmethod
-    def of(cls, item: Note) -> NoteOut:
+    def of(cls, n: Note) -> NoteOut:
         return cls(
-            id=item.id,
-            title=item.title,
-            source=item.source.value,
-            note_count=item.note_count,
-            updated_at=item.updated_at,
-            body=item.body,
-            backlinks=[BacklinkOut(target=b.target, label=b.label) for b in item.backlinks],
-            warning=item.warning,
-            task_code=item.task_code,
+            id=n.id, title=n.title, source=n.source.value, note_count=n.note_count,
+            updated_at=n.updated_at, body=n.body,
+            backlinks=[BacklinkOut(target=b.target, label=b.label) for b in n.backlinks],
+            warning=n.warning, task_code=n.task_code,
         )
 
 
-class MeetingOut(BaseModel):
+class CreateNoteRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    id: str
-    code: str
-    title: str
-    held_at: datetime
-    attendees: list[str]
-    apply_status: str
-    pending_count: int
-
-    @classmethod
-    def of(cls, item: Meeting) -> MeetingOut:
-        return cls(
-            id=item.id,
-            code=item.code,
-            title=item.title,
-            held_at=item.held_at,
-            attendees=list(item.attendees),
-            apply_status=item.apply_status.value,
-            pending_count=item.pending_count,
-        )
-
-
-class DecisionOut(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    id: str
-    ordinal: int
-    text: str
-    applied: bool
-    milestone_code: str | None
-    new_end: date | None
-
-    @classmethod
-    def of(cls, item: Decision) -> DecisionOut:
-        return cls(
-            id=item.id,
-            ordinal=item.ordinal,
-            text=item.text,
-            applied=item.applied,
-            milestone_code=item.milestone_code,
-            new_end=item.new_end,
-        )
-
-
-class ActionItemOut(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    id: str
-    text: str
-    owner: str | None
-    due: date | None
-    task_created: bool
-    needs_approval: bool
-
-    @classmethod
-    def of(cls, item: ActionItem) -> ActionItemOut:
-        return cls(
-            id=item.id,
-            text=item.text,
-            owner=item.owner,
-            due=item.due,
-            task_created=item.task_created,
-            needs_approval=item.needs_approval,
-        )
-
-
-class ShiftOut(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    task_code: str
-    task_title: str
-    old_end: date
-    new_end: date
-
-
-class ApplyPreviewOut(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    milestone_code: str | None
-    new_end: date | None
-    shifts: list[ShiftOut]
-
-    @classmethod
-    def of(cls, item: ApplyPreview) -> ApplyPreviewOut:
-        return cls(
-            milestone_code=item.milestone_code,
-            new_end=item.new_end,
-            shifts=[
-                ShiftOut(
-                    task_code=shift.task_code,
-                    task_title=shift.task_title,
-                    old_end=shift.old_end,
-                    new_end=shift.new_end,
-                )
-                for shift in item.shifts
-            ],
-        )
-
-
-class ApplyRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    mode: ApplyMode
-
-
-class MeetingDetailOut(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    meeting: MeetingOut
-    decisions: list[DecisionOut]
-    action_items: list[ActionItemOut]
-    preview: ApplyPreviewOut
+    title: str = Field(min_length=1, max_length=200)
+    body: str = Field(default="", max_length=200_000)
+    folder: str = Field(default="notes", max_length=40)
 
 
 @router.get("/projects/{project_id}/vault", response_model=Envelope[VaultStatusOut])
-async def get_vault(project_id: str) -> Envelope[VaultStatusOut]:
-    return single(VaultStatusOut.of(get_knowledge_service().get_vault_status(project_id)))
+def get_vault_status(
+    project_id: str, user: CurrentUser, db: Annotated[DbSession, Depends(get_session)]
+) -> Envelope[VaultStatusOut]:
+    project = require_project(db, project_id)
+    return single(VaultStatusOut.of(get_vault().status(project.id, project.code)))
 
 
 @router.post("/projects/{project_id}/vault/sync", response_model=Envelope[VaultStatusOut])
-async def resync_vault(project_id: str) -> Envelope[VaultStatusOut]:
-    return single(VaultStatusOut.of(get_knowledge_service().resync(project_id)))
+def resync_vault(
+    project_id: str, user: CurrentUser, db: Annotated[DbSession, Depends(get_session)]
+) -> Envelope[VaultStatusOut]:
+    project = require_project(db, project_id)
+    vault = get_vault()
+    vault.ensure(project.code)
+    return single(VaultStatusOut.of(vault.resync(project.id, project.code)))
 
 
 @router.get("/projects/{project_id}/notes", response_model=ListEnvelope[NoteOut])
-async def list_notes(project_id: str) -> ListEnvelope[NoteOut]:
-    items = get_knowledge_service().list_notes(project_id)
-    return collection([NoteOut.of(item) for item in items], total=len(items))
+def list_notes(
+    project_id: str, user: CurrentUser, db: Annotated[DbSession, Depends(get_session)]
+) -> ListEnvelope[NoteOut]:
+    project = require_project(db, project_id)
+    items = get_vault().list_notes(project.id, project.code)
+    return collection([NoteOut.of(n) for n in items], total=len(items))
 
 
-@router.get("/notes/{note_id}", response_model=Envelope[NoteOut])
-async def get_note(note_id: str) -> Envelope[NoteOut]:
-    return single(NoteOut.of(get_knowledge_service().get_note(note_id)))
-
-
-@router.get("/projects/{project_id}/meetings", response_model=ListEnvelope[MeetingOut])
-async def list_meetings(project_id: str) -> ListEnvelope[MeetingOut]:
-    items = get_knowledge_service().list_meetings(project_id)
-    return collection([MeetingOut.of(item) for item in items], total=len(items))
-
-
-@router.get("/meetings/{meeting_id}", response_model=Envelope[MeetingDetailOut])
-async def get_meeting(meeting_id: str) -> Envelope[MeetingDetailOut]:
-    service = get_knowledge_service()
-    return single(
-        MeetingDetailOut(
-            meeting=MeetingOut.of(service.get_meeting(meeting_id)),
-            decisions=[DecisionOut.of(item) for item in service.list_decisions(meeting_id)],
-            action_items=[
-                ActionItemOut.of(item) for item in service.list_action_items(meeting_id)
-            ],
-            preview=ApplyPreviewOut.of(service.preview_apply(meeting_id)),
-        )
+@router.post("/projects/{project_id}/notes", response_model=Envelope[NoteOut], status_code=201)
+def create_note(
+    project_id: str,
+    request: CreateNoteRequest,
+    user: CurrentUser,
+    db: Annotated[DbSession, Depends(get_session)],
+) -> Envelope[NoteOut]:
+    project = require_project(db, project_id)
+    vault = get_vault()
+    stem = vault.create_note(
+        project.code, title=request.title, body=request.body, folder=request.folder
     )
-
-
-@router.post("/meetings/{meeting_id}/apply", response_model=Envelope[ApplyPreviewOut])
-async def apply_meeting(meeting_id: str, request: ApplyRequest) -> Envelope[ApplyPreviewOut]:
-    return single(
-        ApplyPreviewOut.of(get_knowledge_service().apply(meeting_id, request.mode))
+    created = next(
+        (n for n in vault.list_notes(project.id, project.code) if n.title == stem), None
     )
+    if created is None:
+        raise not_found("노트를 만들었지만 다시 읽지 못했습니다.")
+    return single(NoteOut.of(created))
+
+
+@router.get("/projects/{project_id}/notes/{note_id}", response_model=Envelope[NoteOut])
+def get_note(
+    project_id: str,
+    note_id: str,
+    user: CurrentUser,
+    db: Annotated[DbSession, Depends(get_session)],
+) -> Envelope[NoteOut]:
+    project = require_project(db, project_id)
+    note = get_vault().get_note(project.id, project.code, note_id)
+    if note is None:
+        raise not_found(f"노트를 찾을 수 없습니다: {note_id}")
+    return single(NoteOut.of(note))

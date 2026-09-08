@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Annotated
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict
+from sqlalchemy.orm import Session as DbSession
 
+from ....common.db import get_session
 from ....common.envelope import Envelope, ListEnvelope, collection, single
+from ...iam.public import CurrentUser
 from ..domain.entities import (
     Credential,
     GpuPriority,
@@ -156,61 +160,94 @@ class SetModelRequest(BaseModel):
 
 
 @router.get("/projects/{project_id}/vcs", response_model=Envelope[VcsStatusOut])
-async def get_vcs(project_id: str) -> Envelope[VcsStatusOut]:
-    return single(VcsStatusOut.of(get_integration_service().vcs_status(project_id)))
+async def get_vcs(
+    project_id: str,
+    user: CurrentUser,
+    db: Annotated[DbSession, Depends(get_session)],
+) -> Envelope[VcsStatusOut]:
+    return single(VcsStatusOut.of(get_integration_service().vcs_status(db, project_id)))
 
 
 @router.post("/projects/{project_id}/vcs/sync", response_model=Envelope[VcsStatusOut])
-async def resync_vcs(project_id: str) -> Envelope[VcsStatusOut]:
-    return single(VcsStatusOut.of(get_integration_service().resync_vcs(project_id)))
+async def resync_vcs(
+    project_id: str,
+    user: CurrentUser,
+    db: Annotated[DbSession, Depends(get_session)],
+) -> Envelope[VcsStatusOut]:
+    return single(VcsStatusOut.of(get_integration_service().resync_vcs(db, project_id)))
 
 
 @router.get(
     "/projects/{project_id}/vcs/mismatches", response_model=ListEnvelope[MismatchOut]
 )
-async def list_mismatches(project_id: str) -> ListEnvelope[MismatchOut]:
-    items = get_integration_service().list_mismatches(project_id)
+async def list_mismatches(
+    project_id: str,
+    user: CurrentUser,
+    db: Annotated[DbSession, Depends(get_session)],
+) -> ListEnvelope[MismatchOut]:
+    items = get_integration_service().list_mismatches(db, project_id)
     return collection([MismatchOut.of(item) for item in items], total=len(items))
 
 
 @router.get("/projects/{project_id}/vcs/mappings", response_model=ListEnvelope[MappingOut])
-async def list_mappings(project_id: str) -> ListEnvelope[MappingOut]:
-    items = get_integration_service().list_mappings(project_id)
+async def list_mappings(
+    project_id: str,
+    user: CurrentUser,
+    db: Annotated[DbSession, Depends(get_session)],
+) -> ListEnvelope[MappingOut]:
+    items = get_integration_service().list_mappings(db, project_id)
     return collection([MappingOut.of(item) for item in items], total=len(items))
 
 
 @router.post("/vcs/mismatches/{mismatch_id}/resolve", response_model=Envelope[MismatchOut])
-async def resolve_mismatch(mismatch_id: str) -> Envelope[MismatchOut]:
-    return single(MismatchOut.of(get_integration_service().resolve_mismatch(mismatch_id)))
+async def resolve_mismatch(
+    mismatch_id: str,
+    user: CurrentUser,
+    db: Annotated[DbSession, Depends(get_session)],
+) -> Envelope[MismatchOut]:
+    return single(MismatchOut.of(get_integration_service().resolve_mismatch(db, mismatch_id)))
 
 
 @router.get("/ai/server", response_model=Envelope[ServerOut])
-async def get_server() -> Envelope[ServerOut]:
+async def get_server(user: CurrentUser) -> Envelope[ServerOut]:
     return single(ServerOut.of(get_integration_service().server()))
 
 
 @router.get("/ai/models", response_model=ListEnvelope[ModelOut])
-async def list_models() -> ListEnvelope[ModelOut]:
+async def list_models(user: CurrentUser) -> ListEnvelope[ModelOut]:
     items = get_integration_service().list_models()
     return collection([ModelOut.of(item) for item in items], total=len(items))
 
 
 @router.put("/projects/{project_id}/ai/model", response_model=Envelope[ModelOut])
-async def set_model(project_id: str, request: SetModelRequest) -> Envelope[ModelOut]:
+async def set_model(
+    project_id: str,
+    request: SetModelRequest,
+    user: CurrentUser,
+    db: Annotated[DbSession, Depends(get_session)],
+) -> Envelope[ModelOut]:
     updated = get_integration_service().set_model(
-        project_id, model=request.model, priority=request.priority
+        db, project_id, model=request.model, priority=request.priority
     )
     return single(ModelOut.of(updated))
 
 
 @router.post("/projects/{project_id}/ai/restart", response_model=Envelope[ModelOut])
-async def restart_model(project_id: str) -> Envelope[ModelOut]:
-    return single(ModelOut.of(get_integration_service().restart_model(project_id)))
+async def restart_model(
+    project_id: str,
+    user: CurrentUser,
+    db: Annotated[DbSession, Depends(get_session)],
+) -> Envelope[ModelOut]:
+    return single(ModelOut.of(get_integration_service().restart_model(db, project_id)))
 
 
 @router.get(
     "/projects/{project_id}/integrations", response_model=ListEnvelope[CredentialOut]
 )
-async def list_credentials(project_id: str) -> ListEnvelope[CredentialOut]:
-    items = get_integration_service().credentials(project_id)
+async def list_credentials(
+    project_id: str,
+    user: CurrentUser,
+    db: Annotated[DbSession, Depends(get_session)],
+) -> ListEnvelope[CredentialOut]:
+    items = get_integration_service().credentials(db, project_id)
     return collection([CredentialOut.of(item) for item in items], total=len(items))

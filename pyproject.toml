@@ -8,6 +8,14 @@ dependencies = [
   # 실제 깃허브 어댑터가 REST API를 호출한다. WP-PKD-031.
   "httpx==0.28.1",
   "uvicorn[standard]==0.35.0",
+  # 영속성. 회원가입한 계정과 만든 프로젝트가 재시작에 사라지면 안 된다.
+  "SQLAlchemy==2.0.43",
+  "alembic==1.16.5",
+  "psycopg[binary]==3.2.10",
+  # 비밀번호 해시. argon2는 bcrypt와 달리 입력 길이 제한이 없다.
+  "argon2-cffi==25.1.0",
+  # FastAPI의 multipart 업로드. 과업지시서 드래그 업로드에 필요하다.
+  "python-multipart==0.0.20",
 ]
 
 [dependency-groups]

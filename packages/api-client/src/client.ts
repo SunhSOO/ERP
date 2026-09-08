@@ -67,15 +67,19 @@ export class ApiUnreachable extends Error {
 export interface ClientOptions {
   baseUrl: string;
   fetchImpl?: typeof fetch;
+  /** 모든 요청에 붙는 헤더. 서버 컴포넌트가 세션 쿠키를 넘길 때 쓴다. */
+  headers?: Record<string, string>;
 }
 
 export class LepClient {
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
+  private readonly headers: Record<string, string>;
 
-  constructor({ baseUrl, fetchImpl }: ClientOptions) {
+  constructor({ baseUrl, fetchImpl, headers }: ClientOptions) {
     this.baseUrl = baseUrl.replace(/\/$/, "");
     this.fetchImpl = fetchImpl ?? fetch;
+    this.headers = headers ?? {};
   }
 
   async get<T>(path: string): Promise<Envelope<T>> {
@@ -107,6 +111,7 @@ export class LepClient {
     try {
       response = await this.fetchImpl(`${this.baseUrl}${path}`, {
         ...init,
+        headers: { ...this.headers, ...(init.headers as Record<string, string>) },
         // 목업 단계에서는 매 요청 신선한 값을 읽는다. 캐시 전략은 실데이터가
         // 들어오는 WP-PKD-020에서 정한다.
         cache: "no-store",

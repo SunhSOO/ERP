@@ -24,6 +24,22 @@ die() { printf '\033[31m오류: %s\033[0m\n' "$*" >&2; exit 1; }
 # ── 사전 확인 ────────────────────────────────────────────────────────────
 [[ -f .env ]] || die ".env가 없다. cp .env.example .env 후 값을 채운다."
 
+# 데이터베이스 비밀번호는 비어 있으면 만들어 채운다. 사람이 고른 짧은 값보다
+# 낫고, .env에 남으므로 재기동해도 같은 값을 쓴다. 이미 값이 있으면 건드리지
+# 않는다. 바꾸면 기존 pgdata 볼륨에 접속하지 못한다.
+if ! grep -qE '^LEP_DB_PASSWORD=.+$' .env; then
+    # 개행이 섞이지 않게 16진수 문자만 남긴다.
+    generated="$(head -c 32 /dev/urandom | od -An -tx1 | tr -dc 'a-f0-9')"
+    if grep -qE '^LEP_DB_PASSWORD=' .env; then
+        # 값만 채운다. 구분자는 |다. 생성값이 16진수라 충돌하지 않는다.
+        sed -i "s|^LEP_DB_PASSWORD=.*|LEP_DB_PASSWORD=${generated}|" .env
+    else
+        { echo; echo "LEP_DB_PASSWORD=${generated}"; } >> .env
+    fi
+    chmod 600 .env
+    log "LEP_DB_PASSWORD를 새로 만들어 .env에 넣었다."
+fi
+
 if [[ -r /etc/os-release ]]; then
     # shellcheck disable=SC1091
     . /etc/os-release
@@ -113,10 +129,22 @@ done
 
 echo
 # 셰방에 기대지 않고 node로 직접 부른다. 백엔드도 같은 방식으로 실행한다.
+# 컨테이너가 떴다는 것과 제품이 쓸 수 있다는 것은 다르다. 데이터베이스와
+# 볼트·업로드 디렉터리에 실제로 쓸 수 있는지 본다.
+READY="$($DOCKER compose exec -T api python -c "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:8000/health/ready',timeout=5).read().decode())" 2>/dev/null || echo '')"
+if printf '%s' "$READY" | grep -q '"status": *"ok"'; then
+    echo "준비 상태: 정상 (데이터베이스·볼트·업로드 모두 쓰기 가능)"
+else
+    warn "준비 점검이 통과하지 못했다. 아래 응답의 checks를 확인한다."
+    printf %s "$READY"; echo
+fi
+
 KORDOC_CLI=/usr/local/lib/node_modules/kordoc/dist/cli.js
 echo "kordoc: $($DOCKER compose exec -T api node "$KORDOC_CLI" --version 2>/dev/null | tail -1 || echo '확인 실패')"
 
 WEB_PORT="$(grep -E '^LEP_WEB_PORT=' .env | cut -d= -f2- || true)"
 echo
-echo "웹: http://localhost:${WEB_PORT:-3000}/home"
-echo "연동 상태 확인: 화면 09 (AI·로컬 LLM 설정)"
+echo "웹: http://localhost:${WEB_PORT:-3000}/"
+echo
+echo "첫 접속은 가입 화면으로 간다. 이 서버의 첫 계정이 관리자가 된다."
+echo "프로젝트는 비어 있다. 만들면 볼트에 프로젝트 코드 폴더가 하나 생긴다."

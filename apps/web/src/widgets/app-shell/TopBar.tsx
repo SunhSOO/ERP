@@ -1,16 +1,19 @@
 import { Suspense } from "react";
 import type { ReactNode } from "react";
 import { StatusTag } from "@lep/ui";
+import type { CurrentUser } from "@lep/api-client";
+import { logoutAction } from "@/src/shared/data/actions";
 import { RoleSegment } from "./RoleSegment";
 
 export interface TopBarProps {
   /** 오른쪽 상태 배지. 목업은 로컬 LLM 실행 여부나 연동 불일치 건수를 보여준다. */
   status?: ReactNode;
-  userName: string;
+  /** 지금 로그인한 사람. 셸은 세션 없이 그려지지 않는다. */
+  user: CurrentUser;
 }
 
 /** 상단바. 목업의 48px 높이를 그대로 쓴다. */
-export function TopBar({ status, userName }: TopBarProps) {
+export function TopBar({ status, user }: TopBarProps) {
   return (
     <header className="col-span-2 flex h-topbar items-center gap-3 border-b border-divider px-4">
       <a className="flex w-[182px] items-center gap-2 no-underline" href="/home">
@@ -60,10 +63,19 @@ export function TopBar({ status, userName }: TopBarProps) {
             aria-hidden="true"
             className="grid h-[26px] w-[26px] place-items-center bg-accent-700 text-[12px] text-white"
           >
-            {userName.slice(0, 1)}
+            {user.initial}
           </span>
-          {userName}
+          {user.display_name}
+          {user.role === "admin" ? <StatusTag tone="idle">관리자</StatusTag> : null}
         </span>
+
+        {/* 로그아웃은 상태를 바꾸는 동작이라 링크가 아니라 POST여야 한다.
+            링크로 두면 브라우저나 프리페치가 먼저 눌러 버릴 수 있다. */}
+        <form action={logoutAction}>
+          <button className="btn btn-ghost btn-sm" type="submit">
+            로그아웃
+          </button>
+        </form>
       </div>
     </header>
   );

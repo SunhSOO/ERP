@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import UTC, datetime
 
+from sqlalchemy.orm import Session as DbSession
+
 from ....common.problems import not_found, state_conflict
 from ...projects.public import require_project
 from ..domain.entities import (
@@ -44,8 +46,8 @@ class DocumentService:
     def converter_version(self) -> str:
         return self._converter.version
 
-    def list_documents(self, project_id: str) -> list[Document]:
-        require_project(project_id)
+    def list_documents(self, db: DbSession, project_id: str) -> list[Document]:
+        require_project(db, project_id)
         return self._repository.list_documents(project_id)
 
     def get_document(self, document_id: str) -> Document:
@@ -82,16 +84,16 @@ class DocumentService:
         return self.convert(document_id)
 
     def list_files(
-        self, project_id: str, category: DriveCategory | None = None
+        self, db: DbSession, project_id: str, category: DriveCategory | None = None
     ) -> list[DriveFile]:
-        require_project(project_id)
+        require_project(db, project_id)
         files = self._repository.list_files(project_id)
         if category is None:
             return files
         return [item for item in files if item.category is category]
 
-    def drive_summary(self, project_id: str) -> list[DriveCategorySummary]:
-        require_project(project_id)
+    def drive_summary(self, db: DbSession, project_id: str) -> list[DriveCategorySummary]:
+        require_project(db, project_id)
         files = self._repository.list_files(project_id)
         summaries: list[DriveCategorySummary] = []
         for category, (label, description, read_only) in _CATEGORY_META.items():
@@ -111,15 +113,15 @@ class DocumentService:
             )
         return summaries
 
-    def add_file(self, project_id: str, *, file_id: str, name: str, category: DriveCategory,
-                 origin: str, size_bytes: int) -> DriveFile:
+    def add_file(self, db: DbSession, project_id: str, *, file_id: str, name: str,
+                 category: DriveCategory, origin: str, size_bytes: int) -> DriveFile:
         """Add a file to the drive.
 
         원본문서 is read-only: a new version belongs in 산출문서 rather than
         replacing the customer's original. The rule lives here, not in the UI.
         """
 
-        require_project(project_id)
+        require_project(db, project_id)
         if category is DriveCategory.ORIGINAL:
             raise state_conflict(
                 "원본문서는 읽기 전용입니다. 새 버전은 산출문서에 올려 주세요."

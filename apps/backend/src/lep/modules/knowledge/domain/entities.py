@@ -94,3 +94,18 @@ class Meeting:
     attendees: list[str]
     apply_status: ApplyStatus
     pending_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class StatementSection:
+    """과업지시서에서 규칙으로 뽑아낸 절 하나.
+
+    delivery 모듈이 문서를 쪼개고 이 형태로 넘긴다. knowledge는 문서 형식을
+    모르고, delivery는 파일 시스템을 모른다. 둘 사이의 계약이 이것 하나다.
+    """
+
+    number: str
+    title: str
+    body: str
+    level: int
+    parent: str | None

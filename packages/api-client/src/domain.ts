@@ -13,7 +13,7 @@ export type TaskStatus =
   | "vcs_only";
 
 export type Confidence = "high" | "medium" | "low";
-export type SyncHealth = "ok" | "stale" | "mismatch" | "unknown";
+export type SyncHealth = "ok" | "stale" | "mismatch" | "unknown" | "not_configured";
 export type LinkHealth = "ok" | "stale" | "mismatch" | "expired" | "not_configured";
 export type ViewRole = "vendor" | "client";
 
@@ -24,6 +24,7 @@ export interface Project {
   customer_name: string;
   role: ViewRole;
   pm_name: string;
+  created_at: string;
 }
 
 export interface ProjectSummary {
@@ -35,6 +36,8 @@ export interface ProjectSummary {
   unclassified_mail_count: number;
   vcs_health: SyncHealth;
   vcs_note: string;
+  task_count: number;
+  statement_count: number;
 }
 
 export interface Milestone {
@@ -67,6 +70,8 @@ export interface Statement {
   clause_count: number;
   classified_count: number;
   analysed: boolean;
+  /** 파싱이 실패했으면 사유. 성공으로 숨기지 않는다. */
+  parse_error: string | null;
 }
 
 export interface Clause {
@@ -77,6 +82,26 @@ export interface Clause {
   confidence: Confidence;
   wbs_mapping: string | null;
   promoted_task_id: string | null;
+  /** 절 본문 전체. */
+  body: string;
+  /** 십진 번호에서 온 깊이. `1`은 1, `1.1`은 2. */
+  level: number;
+  parent: string | null;
+  /** 수행해서 완료할 수 있는 일인지. 계약 조건은 거짓이다. */
+  actionable: boolean;
+  /** 분류 근거, 또는 분류하지 못한 사유. */
+  classified_reason: string | null;
+  /** 어느 분류기가 답했는지. `fixture`면 아무것도 분류하지 않았다는 뜻이다. */
+  classified_by: string | null;
+}
+
+export interface ClassificationRun {
+  classifier: string;
+  total: number;
+  classified: number;
+  failed: number;
+  /** 실제 모델을 요청했는데 쓰지 못한 사유. */
+  unavailable_reason: string | null;
 }
 
 export interface VaultStatus {
@@ -257,4 +282,27 @@ export interface Credential {
   detail: string;
   /** 실제 어댑터가 동작하려면 운영자가 넣어야 할 것. 비밀 값 자체는 담지 않는다. */
   missing_input: string | null;
+}
+
+// ── 인증 ────────────────────────────────────────────────────────────────
+
+export interface CurrentUser {
+  id: string;
+  email: string;
+  display_name: string;
+  role: "admin" | "member";
+  /** 상단바 아바타에 쓰는 한 글자. */
+  initial: string;
+}
+
+export interface SignupState {
+  /** 아직 아무도 가입하지 않았으면 다음 가입자가 관리자가 된다. */
+  first_account: boolean;
+}
+
+// ── 업로드 ──────────────────────────────────────────────────────────────
+
+export interface UploadLimits {
+  max_bytes: number;
+  suffixes: string[];
 }
