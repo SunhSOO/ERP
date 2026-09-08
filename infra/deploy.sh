@@ -129,6 +129,16 @@ done
 
 echo
 # 셰방에 기대지 않고 node로 직접 부른다. 백엔드도 같은 방식으로 실행한다.
+# 컨테이너가 떴다는 것과 제품이 쓸 수 있다는 것은 다르다. 데이터베이스와
+# 볼트·업로드 디렉터리에 실제로 쓸 수 있는지 본다.
+READY="$($DOCKER compose exec -T api python -c "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:8000/health/ready',timeout=5).read().decode())" 2>/dev/null || echo '')"
+if printf '%s' "$READY" | grep -q '"status": *"ok"'; then
+    echo "준비 상태: 정상 (데이터베이스·볼트·업로드 모두 쓰기 가능)"
+else
+    warn "준비 점검이 통과하지 못했다. 아래 응답의 checks를 확인한다."
+    printf %s "$READY"; echo
+fi
+
 KORDOC_CLI=/usr/local/lib/node_modules/kordoc/dist/cli.js
 echo "kordoc: $($DOCKER compose exec -T api node "$KORDOC_CLI" --version 2>/dev/null | tail -1 || echo '확인 실패')"
 

@@ -58,8 +58,10 @@ COPY apps/backend/src ./apps/backend/src
 COPY scripts ./scripts
 
 # 루트로 돌리지 않는다. 볼트와 산출물 디렉터리는 이 사용자 소유여야 한다.
+# 이름 있는 볼륨은 이미지 안의 같은 경로에서 소유권을 물려받는다. 여기서 미리
+# 만들어 두지 않으면 도커가 root 소유로 만들고 uid 10001이 쓰지 못한다.
 RUN useradd --create-home --uid 10001 lep \
-    && mkdir -p /data/kordoc-out /data/vault \
+    && mkdir -p /data/kordoc-out /data/vault /data/uploads \
     && chown -R lep:lep /app /data
 USER lep
 

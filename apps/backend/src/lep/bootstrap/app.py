@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import logging
+import os
+import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from pydantic import BaseModel, ConfigDict
+from sqlalchemy import text
 
 from ..common.problems import register_problem_handlers
 from ..common.schema import create_all
@@ -28,6 +32,51 @@ class HealthLiveResponse(BaseModel):
 
     status: str
     service: str
+
+
+class CheckResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    ok: bool
+    #: 실패 사유. 통과했으면 비어 있다.
+    detail: str = ""
+
+
+class HealthReadyResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: str
+    checks: list[CheckResult]
+
+
+def _writable(name: str, target: Path) -> CheckResult:
+    """디렉터리에 실제로 파일을 하나 써 본다.
+
+    존재 여부만 보면 부족하다. 이름 있는 도커 볼륨은 이미지에 같은 경로가 없으면
+    root 소유로 만들어지는데, 그러면 폴더는 있고 쓰기만 막힌다. 그 상태는 첫
+    업로드나 첫 지식화에서야 드러난다. 여기서 미리 드러나게 한다.
+    """
+
+    probe = target / f".readycheck-{uuid.uuid4().hex}"
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+    except OSError as exc:
+        return CheckResult(name=name, ok=False, detail=f"{target}: {exc}")
+    return CheckResult(name=name, ok=True)
+
+
+def _database_reachable() -> CheckResult:
+    from ..common.db import session_scope
+
+    try:
+        with session_scope() as session:
+            session.execute(text("select 1"))
+    except Exception as exc:  # noqa: BLE001 - 사유를 그대로 보고한다
+        return CheckResult(name="database", ok=False, detail=str(exc))
+    return CheckResult(name="database", ok=True)
 
 
 @asynccontextmanager
@@ -64,6 +113,29 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         logger.info("health_live")
         return HealthLiveResponse(status="ok", service=runtime.service_name)
+
+    @application.get("/health/ready", response_model=HealthReadyResponse, tags=["health"])
+    def health_ready() -> HealthReadyResponse:
+        """배포가 실제로 쓸 수 있는 상태인지 본다.
+
+        컨테이너가 떴다는 것과 제품이 동작한다는 것은 다르다. 데이터베이스에
+        닿는지, 볼트와 업로드 디렉터리에 쓸 수 있는지를 확인한다. 200이어도
+        개별 항목이 실패했을 수 있으므로 ``status``와 ``checks``를 함께 읽는다.
+
+        블로킹 호출이라 ``def``로 둔다. FastAPI가 스레드풀에서 돌린다.
+        """
+
+        checks = [
+            _database_reachable(),
+            _writable("vault", Path(os.getenv("LEP_OBSIDIAN_VAULT", ".vault"))),
+            _writable("uploads", Path(os.getenv("LEP_UPLOAD_DIR", ".uploads"))),
+        ]
+        failed = [c.name for c in checks if not c.ok]
+        if failed:
+            logger.warning("health_ready_failed", extra={"failed": failed})
+        return HealthReadyResponse(
+            status="ok" if not failed else "degraded", checks=checks
+        )
 
     # 각 모듈이 자기 라우트를 소유한다. bootstrap은 붙이기만 한다.
     application.include_router(auth_router)
