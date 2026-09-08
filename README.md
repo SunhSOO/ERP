@@ -54,12 +54,15 @@ corepack pnpm build
 백엔드와 프론트엔드를 각각 띄운다.
 
 ```text
-uv run uvicorn lep.bootstrap.app:app --app-dir apps/backend/src --reload
+uv run uvicorn lep.bootstrap.app:app --app-dir apps/backend/src --env-file .env --reload
 corepack pnpm --filter @lep/web dev
 ```
 
 `.env.example`을 참고해 `.env`와 `apps/web/.env.local`을 만든다. 백엔드는
 `LEP_DATABASE_URL`이 없으면 뜨지 않는다. 어느 저장소에 쓰는지 추측하지 않는다.
+
+`.env`는 자동으로 읽히지 않는다. 위 명령의 `--env-file .env`가 그 일을 한다.
+빼면 변수가 없다며 기동을 거부한다.
 
 첫 접속은 가입 화면으로 간다. 이 서버의 **첫 계정이 관리자**가 되고, 이후 가입은
 누구나 할 수 있다. 프로젝트는 하나도 없는 상태로 시작하며, 만들면 지식 볼트에
