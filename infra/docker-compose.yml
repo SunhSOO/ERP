@@ -76,6 +76,8 @@ services:
       LEP_HIWORKS_USER: ${LEP_HIWORKS_USER:-}
       LEP_HIWORKS_PASSWORD: ${LEP_HIWORKS_PASSWORD:-}
       LEP_HIWORKS_PROJECT_DOMAINS: ${LEP_HIWORKS_PROJECT_DOMAINS:-}
+      # POP3에는 서버 검색이 없다. 최근 몇 통까지 훑을지 정한다.
+      LEP_HIWORKS_LIMIT: ${LEP_HIWORKS_LIMIT:-300}
 
       # ── 로컬 LLM ───────────────────────────────────────────────────────
       # 과업지시서 조항 분류에 쓴다. 문서가 사내를 벗어나지 않는다.

@@ -54,9 +54,14 @@ DEFAULT_PORT = 995
 #: 상세 화면은 그때 전체를 다시 읽는다.
 PREVIEW_BODY_LINES = 200
 
-#: How many recent messages to read. The mailbox screen shows a working set, not
-#: an archive.
-DEFAULT_LIMIT = 50
+#: How many recent messages to read.
+#:
+#: POP3 has no server-side search, so finding a project's mail means pulling
+#: headers for the newest N and filtering here. 50 was too few on a real
+#: mailbox: 721 messages, of which the client's five sat well outside the most
+#: recent fifty because internal mail dominates the traffic. Reading is roughly
+#: 12 messages a second, so this trades page latency for reach.
+DEFAULT_LIMIT = 300
 
 TIMEOUT_SECONDS = 20
 
@@ -97,6 +102,14 @@ def mail_password() -> str | None:
     """
 
     return os.getenv("LEP_HIWORKS_PASSWORD") or None
+
+
+def mail_limit() -> int:
+    raw = os.getenv("LEP_HIWORKS_LIMIT", str(DEFAULT_LIMIT))
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return DEFAULT_LIMIT
 
 
 def project_domains() -> dict[str, str]:
@@ -185,7 +198,11 @@ class HiworksMailAdapter:
         if not user or not password:
             raise ValueError("LEP_HIWORKS_USER와 LEP_HIWORKS_PASSWORD가 필요합니다.")
         return cls(
-            host=mail_host(), port=mail_port(), user=user, password=password
+            host=mail_host(),
+            port=mail_port(),
+            user=user,
+            password=password,
+            limit=mail_limit(),
         )
 
     @contextmanager
