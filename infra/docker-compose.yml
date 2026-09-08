@@ -84,7 +84,8 @@ services:
       LEP_ADAPTER_LLM: ${LEP_ADAPTER_LLM:-fixture}
       LEP_LLM_BASE_URL: ${LEP_LLM_BASE_URL:-http://ollama:11434/v1}
       LEP_LLM_MODEL: ${LEP_LLM_MODEL:-}
-      LEP_LLM_TIMEOUT_SECONDS: ${LEP_LLM_TIMEOUT_SECONDS:-120}
+      # 재시작 직후 첫 요청은 모델 적재(약 80초)를 함께 낸다.
+      LEP_LLM_TIMEOUT_SECONDS: ${LEP_LLM_TIMEOUT_SECONDS:-180}
     volumes:
       # 볼트는 읽고 쓴다. 회의록과 메일을 지식화하면 여기에 파일이 생긴다.
       - ${LEP_VAULT_HOST_PATH:-./vault}:/data/vault
@@ -123,6 +124,14 @@ services:
     image: ollama/ollama:0.33.3
     profiles: ["llm"]
     restart: unless-stopped
+    environment:
+      # 모델을 VRAM에 올려 둔다. 기본값은 5분 뒤 내리는데, 그러면 분류를
+      # 부를 때마다 17GB를 다시 올리느라 80초를 낸다. 데워진 뒤 한 건에
+      # 1.5초인 것과 비교하면 차이가 전부 적재 시간이다.
+      # 이 서버의 GPU는 이 용도로 쓰므로 붙들고 있는 편이 낫다.
+      OLLAMA_KEEP_ALIVE: "-1"
+      # 분류는 절마다 따로 묻는다. 병렬 슬롯이 하나면 줄을 선다.
+      OLLAMA_NUM_PARALLEL: "4"
     volumes:
       - ollama:/root/.ollama
     networks:
