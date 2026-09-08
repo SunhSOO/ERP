@@ -115,7 +115,9 @@ services:
   # 선택. `docker compose --profile llm up -d`로 함께 띄운다.
   # OpenAI 호환 엔드포인트를 내므로 WP-PKD-033 어댑터가 붙는 즉시 연결된다.
   ollama:
-    image: ollama/ollama:0.5.7
+    # RTX 5090은 Blackwell(sm_120)이다. CUDA 12.8 이상을 담은 빌드여야
+    # GPU를 쓴다. 0.5.7은 그보다 앞선 버전이라 CPU로 떨어진다.
+    image: ollama/ollama:0.33.3
     profiles: ["llm"]
     restart: unless-stopped
     volumes:
