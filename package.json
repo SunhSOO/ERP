@@ -1,0 +1,11 @@
+{
+  "name": "luminode-erp-workspace",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "lint": "corepack pnpm --filter @lep/web lint",
+    "typecheck": "corepack pnpm --filter @lep/web typecheck",
+    "build": "corepack pnpm --filter @lep/web build",
+    "test-unit": "corepack pnpm --filter @lep/web test"
+  }
+}

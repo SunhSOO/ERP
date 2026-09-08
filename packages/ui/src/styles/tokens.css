@@ -1,0 +1,113 @@
+/* Luminode 디자인 토큰.
+ *
+ * 값의 출처는 `UI mockups/exports/`의 "Industry" 디자인 시스템이다. 임의로 조정하지
+ * 않는다. 예외는 ADR-019가 승인한 명암비 보정뿐이며 해당 항목에 주석으로 표시했다.
+ *
+ * Tailwind v4의 `@theme`는 각 토큰을 CSS 사용자 정의 속성이자 유틸리티 클래스로
+ * 만든다. `--color-accent-700`은 `bg-accent-700`과 `text-accent-700`이 된다.
+ */
+
+@theme {
+  /* ── 기본 색상 ────────────────────────────────────────────────────────── */
+  --color-bg: #f2f2f3;
+  --color-surface: #e9e9ea;
+  --color-text: #1d1f20;
+  --color-accent: #5980a6;
+  --color-accent-2: #728fab;
+  --color-divider: color-mix(in srgb, #1d1f20 16%, transparent);
+
+  /* ADR-019. 목업의 `.text-muted`(잉크 55%, 3.7:1)와 neutral-600(3.9:1)이 AA에
+   * 미달해 보조 텍스트를 neutral-700(5.9:1)으로 올린다. neutral-500과 600은
+   * 테두리·장식 전용으로 격하한다. */
+  --color-text-muted: #5d5d60;
+
+  /* ── 계조 ─────────────────────────────────────────────────────────────
+   * OKLCH 공통 명도 스케일에서 생성됐다. 같은 단계끼리 시각 명도가 맞는다. */
+  --color-neutral-100: #f5f5f8;
+  --color-neutral-200: #e7e7ea;
+  --color-neutral-300: #d4d4d7;
+  --color-neutral-400: #b7b7ba;
+  --color-neutral-500: #98989b;
+  --color-neutral-600: #7a7a7d;
+  --color-neutral-700: #5d5d60;
+  --color-neutral-800: #424244;
+  --color-neutral-900: #2b2b2d;
+
+  --color-accent-100: #eef6ff;
+  --color-accent-200: #d6ebff;
+  --color-accent-300: #b5d9fd;
+  --color-accent-400: #94bce3;
+  --color-accent-500: #749dc4;
+  --color-accent-600: #597ea3;
+  --color-accent-700: #416180;
+  --color-accent-800: #2c455d;
+  --color-accent-900: #1d2d3d;
+
+  --color-accent-2-100: #eef6ff;
+  --color-accent-2-200: #d6ebff;
+  --color-accent-2-300: #bdd8f2;
+  --color-accent-2-400: #9ebbd8;
+  --color-accent-2-500: #7e9cb8;
+  --color-accent-2-600: #627d98;
+  --color-accent-2-700: #486077;
+  --color-accent-2-800: #314457;
+  --color-accent-2-900: #1f2d3a;
+
+  /* ── 상태 색상 ────────────────────────────────────────────────────────
+   * 각 상태는 기본색·배경·잉크 삼중항이다. 배지는 배경과 잉크를 함께 쓴다.
+   * 색상만으로 상태를 전달하지 않는다. StatusTag가 글리프와 텍스트를 강제한다. */
+  --color-success: #5f8f72;
+  --color-success-bg: #e2eee6;
+  --color-success-ink: #2c5a3c;
+
+  --color-warning: #b0873f;
+  --color-warning-bg: #f3e9d6;
+  --color-warning-ink: #654a17;
+
+  --color-danger: #b2605b;
+  --color-danger-bg: #f4e1df;
+  --color-danger-ink: #6e2e2a;
+
+  --color-info: #5980a6;
+  --color-info-bg: #e4edf7;
+  --color-info-ink: #2c455d;
+
+  --color-muted: #98989b;
+  --color-muted-bg: #e7e7ea;
+  --color-muted-ink: #424244;
+
+  /* AI가 생성한 값은 사람이 입력한 값과 시각적으로 구분한다. AGENTS.md 11절. */
+  --color-ai: #7d6fa6;
+  --color-ai-bg: #e9e5f4;
+  --color-ai-ink: #43377a;
+
+  /* ── 타이포 ───────────────────────────────────────────────────────────
+   * Barlow에는 한글 글리프가 없다. 한글은 Noto Sans KR로 떨어진다.
+   * 폰트 자체 호스팅은 아직이다. 현재는 시스템에 설치된 경우에만 적용된다. */
+  --font-heading: "Barlow Condensed", "Noto Sans KR", system-ui, sans-serif;
+  --font-body: "Barlow", "Noto Sans KR", system-ui, sans-serif;
+  --font-weight-heading: 600;
+
+  /* ── 간격 ─────────────────────────────────────────────────────────────
+   * 목업 스케일은 3.4px의 배수다. Tailwind의 동적 간격 기준값을 3.4px로 두면
+   * `p-1 p-2 p-3 p-4 p-6 p-8`이 목업의 3.4 / 6.8 / 10.2 / 13.6 / 20.4 / 27.2px과
+   * 정확히 일치한다. 별도 간격 토큰이 필요 없다. */
+  --spacing: 3.4px;
+
+  /* ── 라디우스 ─────────────────────────────────────────────────────────
+   * blueprint 프레임이 컴포넌트 라디우스를 0으로 되돌린다. components.css 참조. */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 7px;
+
+  /* ── 그림자 ───────────────────────────────────────────────────────── */
+  --shadow-sm: 0 1px 2px color-mix(in srgb, #2b2b2d 14%, transparent);
+  --shadow-md: 0 3px 10px color-mix(in srgb, #2b2b2d 16%, transparent);
+  --shadow-lg: 0 12px 32px color-mix(in srgb, #2b2b2d 22%, transparent);
+
+  /* ── 앱 셸 치수 ───────────────────────────────────────────────────────
+   * 목업 아트보드는 1280×760 고정이다. 폭은 반응형으로 바꾸되 상단바 높이와
+   * 좌측 메뉴 폭은 목업 값을 지킨다. */
+  --spacing-topbar: 48px;
+  --spacing-sidenav: 208px;
+}

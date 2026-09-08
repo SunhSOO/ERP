@@ -1,0 +1,12 @@
+/* Luminode 디자인 시스템 진입점.
+ *
+ * 순서가 의미를 가진다. 토큰이 먼저 정의되어야 base와 components가 참조할 수 있고,
+ * components.css 안의 blueprint 재정의 블록이 그 파일의 마지막이어야 한다.
+ *
+ * 이 파일을 직접 임포트하지 말고 `@lep/ui/styles/index.css`로 임포트한다.
+ * Tailwind 본체(`@import "tailwindcss"`)는 소비하는 앱이 먼저 임포트한다.
+ */
+
+@import "./tokens.css";
+@import "./base.css";
+@import "./components.css";

@@ -7,6 +7,7 @@ __pycache__/
 .corepack/
 .venv/
 .env
+.env*.local
 !.env.example
 node_modules/
 .next/
@@ -14,5 +15,13 @@ out/
 dist/
 coverage/
 *.log
+*.tsbuildinfo
 .worktrees/
 worktrees/
+
+# kordoc이 생성한 hwpx 산출물
+.kordoc-out/
+
+# 서버 배포 비밀과 볼트 데이터
+infra/.env
+infra/vault/

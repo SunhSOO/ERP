@@ -1,0 +1,32 @@
+# 빌드 컨텍스트에서 뺀다. 이미지에 들어갈 이유가 없고 전송만 느려진다.
+.git
+.github
+node_modules
+**/node_modules
+.next
+**/.next
+.venv
+.pnpm-store
+.corepack
+.uv-cache
+.mypy_cache
+.ruff_cache
+.pytest_cache
+**/__pycache__
+.kordoc-out
+dist
+coverage
+
+# 57MB짜리 목업 익스포트. 애플리케이션 실행에 필요 없다.
+UI mockups
+
+# 설계 문서 사본과 문서 전체. 런타임에 쓰이지 않는다.
+luminode_erp
+docs
+
+# 비밀이 든 파일은 절대 이미지에 넣지 않는다.
+.env
+**/.env
+**/.env.local
+infra/.env
+infra/vault

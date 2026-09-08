@@ -1,0 +1,15 @@
+{
+  "extends": "../../packages/tsconfig/tsconfig.base.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "incremental": true,
+    "plugins": [{ "name": "next" }],
+    "paths": {
+      "@lep/api-client": ["../../packages/api-client/src"],
+      "@lep/ui": ["../../packages/ui/src"],
+      "@/*": ["./*"]
+    }
+  },
+  "include": ["next-env.d.ts", ".next/types/**/*.ts", "**/*.ts", "**/*.tsx"],
+  "exclude": ["node_modules"]
+}

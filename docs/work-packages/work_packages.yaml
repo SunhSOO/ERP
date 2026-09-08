@@ -194,6 +194,10 @@ packages:
   stream: ux
   title: 디자인 시스템·전역 레이아웃
   goal: 공통 컴포넌트, 내비게이션, 화면 상태 표준을 만든다.
+  note: >
+    ADR-016에 따라 pkd 트랙의 WP-PKD-001과 WP-PKD-002가 인증 비의존 부분집합을
+    먼저 구현한다. 인증이 들어오면 이 패키지는 기존 디자인 시스템을 실제 세션에
+    연결하는 작업이 된다. pkd_work_packages.yaml 참조.
   dependencies:
   - WP-PLT-001
   - WP-PLT-002

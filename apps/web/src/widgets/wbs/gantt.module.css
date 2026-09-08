@@ -1,0 +1,70 @@
+/* 간트 차트 전용 스타일. 목업의 .gtrack / .gbar에 해당한다.
+ * 이 화면에서만 쓰이므로 packages/ui가 아니라 위젯 옆에 둔다. */
+
+.gantt {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  table-layout: fixed;
+}
+
+.gantt th,
+.gantt td {
+  border-bottom: 1px solid color-mix(in srgb, var(--color-text) 8%, transparent);
+  padding: 6px 8px;
+}
+
+.gantt thead th {
+  text-align: left;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.gantt thead th:not(:first-child),
+.gantt tbody td {
+  width: 68px;
+  text-align: center;
+}
+
+.gantt tbody th {
+  width: 320px;
+  text-align: left;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 13px;
+  color: var(--color-text);
+}
+
+.milestone {
+  font-weight: 500;
+}
+
+.gantt tbody td {
+  position: relative;
+  vertical-align: middle;
+}
+
+/* 기본 막대. 왼쪽 끝 셀에서 시작해 기간만큼 오른쪽으로 뻗는다. */
+.bar {
+  display: block;
+  height: 10px;
+  background: var(--color-accent-600);
+  border: 1px solid var(--color-accent-700);
+}
+
+/* WBS에 정의되지 않았지만 저장소에서 감지된 작업. */
+.barDashed {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--color-warning);
+}
+
+/* 완료 표시된 작업. */
+.barDone {
+  background: var(--color-neutral-400);
+  border-color: var(--color-neutral-500);
+}
