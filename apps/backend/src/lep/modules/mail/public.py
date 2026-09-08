@@ -7,7 +7,7 @@ from functools import lru_cache
 from ...common.adapters import mail_choice
 from .application.services import MailPort, MailService
 from .infrastructure.fixtures import EmptyMailAdapter
-from .infrastructure.hiworks_imap import HiworksMailAdapter
+from .infrastructure.hiworks_pop3 import HiworksMailAdapter
 
 __all__ = ["get_mail_service", "unclassified_count"]
 
