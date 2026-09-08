@@ -79,9 +79,13 @@ services:
       LEP_HIWORKS_PROJECT_DOMAINS: ${LEP_HIWORKS_PROJECT_DOMAINS:-}
 
       # ── 로컬 LLM ───────────────────────────────────────────────────────
-      # 어댑터는 WP-PKD-033이다. ollama 프로파일로 서버만 미리 띄울 수 있다.
+      # 과업지시서 조항 분류에 쓴다. 문서가 사내를 벗어나지 않는다.
+      # 모델 이름이 없으면 실제 어댑터를 켜지 않는다. 없는 모델을 몰래 고르면
+      # 첫 분류 요청에서야 404가 나고 화면에서 사유를 알 수 없다.
       LEP_ADAPTER_LLM: ${LEP_ADAPTER_LLM:-fixture}
       LEP_LLM_BASE_URL: ${LEP_LLM_BASE_URL:-http://ollama:11434/v1}
+      LEP_LLM_MODEL: ${LEP_LLM_MODEL:-}
+      LEP_LLM_TIMEOUT_SECONDS: ${LEP_LLM_TIMEOUT_SECONDS:-120}
     volumes:
       # 볼트는 읽고 쓴다. 회의록과 메일을 지식화하면 여기에 파일이 생긴다.
       - ${LEP_VAULT_HOST_PATH:-./vault}:/data/vault

@@ -82,6 +82,26 @@ export interface Clause {
   confidence: Confidence;
   wbs_mapping: string | null;
   promoted_task_id: string | null;
+  /** 절 본문 전체. */
+  body: string;
+  /** 십진 번호에서 온 깊이. `1`은 1, `1.1`은 2. */
+  level: number;
+  parent: string | null;
+  /** 수행해서 완료할 수 있는 일인지. 계약 조건은 거짓이다. */
+  actionable: boolean;
+  /** 분류 근거, 또는 분류하지 못한 사유. */
+  classified_reason: string | null;
+  /** 어느 분류기가 답했는지. `fixture`면 아무것도 분류하지 않았다는 뜻이다. */
+  classified_by: string | null;
+}
+
+export interface ClassificationRun {
+  classifier: string;
+  total: number;
+  classified: number;
+  failed: number;
+  /** 실제 모델을 요청했는데 쓰지 못한 사유. */
+  unavailable_reason: string | null;
 }
 
 export interface VaultStatus {

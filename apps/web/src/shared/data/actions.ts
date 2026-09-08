@@ -329,6 +329,48 @@ export async function dismissMailAction(
   return result;
 }
 
+// ── 과업지시서 분류 ───────────────────────────────────────────────────
+
+/** 조항을 분류한다. 모델이 절마다 몇 초씩 걸려 오래 걸릴 수 있다. */
+export async function classifyStatementAction(
+  projectId: string,
+  statementId: string,
+): Promise<ActionResult> {
+  const result = await guard(async () => {
+    const response = await call(`/api/v1/statements/${statementId}/classify`);
+    if (!response.ok) return toProblem(response);
+
+    const run = (await response.json()).data;
+
+    // 픽스처가 답했다는 것은 아무것도 분류하지 않았다는 뜻이다. 완료로 쓰지 않는다.
+    if (run.classifier === "fixture") {
+      return {
+        ok: false,
+        message:
+          run.unavailable_reason ??
+          "로컬 LLM이 설정되지 않아 분류하지 않았습니다. AI 설정을 확인해 주세요.",
+      };
+    }
+    if (run.classified === 0) {
+      return {
+        ok: false,
+        message: `${run.classifier}가 ${run.total}개 조항을 하나도 분류하지 못했습니다. 각 조항의 사유를 확인해 주세요.`,
+      };
+    }
+    if (run.failed > 0) {
+      // 절반의 성공을 성공이라 하지 않는다.
+      return {
+        ok: true,
+        message: `${run.classified}개를 분류했습니다. ${run.failed}개는 실패했고 사유가 조항에 남아 있습니다.`,
+      };
+    }
+    return { ok: true, message: `${run.classified}개 조항을 모두 분류했습니다.` };
+  });
+
+  revalidatePath(`/projects/${projectId}`, "layout");
+  return result;
+}
+
 // ── 회의록 ────────────────────────────────────────────────────────────
 
 /** 회의록은 볼트의 `meetings` 폴더에 있는 노트다. 별도 저장소가 없다. */
