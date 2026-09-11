@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 from sqlalchemy.orm import Session as DbSession
 
 from ....common.db import get_session
@@ -95,8 +95,15 @@ class ServerOut(BaseModel):
 
     name: str
     network_note: str
-    gpu_usage_percent: int
-    active_model_count: int
+    status: str
+    detail: str
+    #: GPU utilization is not reported by ``/models`` or ``/api/ps``. Always
+    #: ``null`` rather than a fabricated 0; the frontend shows 미측정.
+    gpu_usage_percent: int | None
+    #: Loaded models only, per ``/api/ps``. ``null`` when unmeasured, never 0.
+    active_model_count: int | None
+    available_model_names: list[str]
+    running_model_names: list[str]
     project_count: int
 
     @classmethod
@@ -104,8 +111,12 @@ class ServerOut(BaseModel):
         return cls(
             name=item.name,
             network_note=item.network_note,
+            status=item.status.value,
+            detail=item.detail,
             gpu_usage_percent=item.gpu_usage_percent,
             active_model_count=item.active_model_count,
+            available_model_names=list(item.available_model_names),
+            running_model_names=list(item.running_model_names),
             project_count=item.project_count,
         )
 
@@ -152,11 +163,66 @@ class CredentialOut(BaseModel):
         )
 
 
+class RepositoryConnectionOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    connected: bool
+    repository: str | None
+    version: int
+
+    @classmethod
+    def of(cls, item: object) -> RepositoryConnectionOut:
+        from ..domain.entities import ProjectRepositoryConnection
+        if isinstance(item, ProjectRepositoryConnection):
+            return cls(connected=True, repository=item.repository, version=item.version)
+        return cls(connected=False, repository=None, version=0)
+
+
+class RepositoryConnectionAuditOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    previous_repository: str | None
+    new_repository: str
+    actor_id: str
+    created_at: datetime
+
+    @classmethod
+    def of(cls, item: object) -> RepositoryConnectionAuditOut:
+        from ..domain.entities import ProjectRepositoryConnectionAudit
+        if isinstance(item, ProjectRepositoryConnectionAudit):
+            return cls(
+                id=item.id,
+                previous_repository=item.previous_repository,
+                new_repository=item.new_repository,
+                actor_id=item.actor_id,
+                created_at=item.created_at,
+            )
+        raise ValueError("Invalid item type")
+
+
+class SetRepositoryConnectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    repository: str
+    expected_version: int
+
+    @field_validator("repository")
+    @classmethod
+    def validate_repository(cls, v: str) -> str:
+        import re
+        if not re.match(r"^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?/[a-zA-Z0-9._-]+$", v):
+            raise ValueError("저장소는 owner/repository 형식이어야 합니다.")
+        return v
+
+
 class SetModelRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     model: str
     priority: GpuPriority
+
+
 
 
 @router.get("/projects/{project_id}/vcs", response_model=Envelope[VcsStatusOut])
@@ -209,7 +275,10 @@ async def resolve_mismatch(
 
 
 @router.get("/ai/server", response_model=Envelope[ServerOut])
-async def get_server(user: CurrentUser) -> Envelope[ServerOut]:
+def get_server(user: CurrentUser) -> Envelope[ServerOut]:
+    # Sync def: ``.server()`` makes a blocking httpx call to the inference
+    # server. FastAPI runs sync routes in its threadpool, so this blocking
+    # call does not stall the event loop the way it would under ``async def``.
     return single(ServerOut.of(get_integration_service().server()))
 
 
@@ -244,10 +313,67 @@ async def restart_model(
 @router.get(
     "/projects/{project_id}/integrations", response_model=ListEnvelope[CredentialOut]
 )
-async def list_credentials(
+def list_credentials(
     project_id: str,
     user: CurrentUser,
     db: Annotated[DbSession, Depends(get_session)],
 ) -> ListEnvelope[CredentialOut]:
+    # Sync def: ``.credentials()`` reads the LLM runtime snapshot, which makes
+    # a blocking httpx call. See ``get_server`` above for why this must not
+    # be ``async def``.
     items = get_integration_service().credentials(db, project_id)
     return collection([CredentialOut.of(item) for item in items], total=len(items))
+
+
+@router.get(
+    "/projects/{project_id}/vcs/connection",
+    response_model=Envelope[RepositoryConnectionOut],
+)
+def get_connection(
+    project_id: str,
+    user: CurrentUser,
+    db: Annotated[DbSession, Depends(get_session)],
+) -> Envelope[RepositoryConnectionOut]:
+    connection = get_integration_service().get_connection(db, project_id)
+    return single(RepositoryConnectionOut.of(connection))
+
+
+@router.put(
+    "/projects/{project_id}/vcs/connection",
+    response_model=Envelope[RepositoryConnectionOut],
+)
+def set_connection(
+    project_id: str,
+    request: SetRepositoryConnectionRequest,
+    user: CurrentUser,
+    db: Annotated[DbSession, Depends(get_session)],
+) -> Envelope[RepositoryConnectionOut]:
+    from ....common.problems import ProblemError
+    from ...projects.public import get_project_service
+
+    # Check authorization: only admin or project creator can modify
+    project_service = get_project_service(db)
+    project = project_service.get_project(project_id)
+
+    if not user.is_admin and project.created_by != user.id:
+        raise ProblemError("FORBIDDEN", "이 프로젝트의 저장소 연결을 수정할 권한이 없습니다.")
+
+    updated = get_integration_service().set_connection(
+        db, project_id, request.repository, request.expected_version, user.id
+    )
+    return single(RepositoryConnectionOut.of(updated))
+
+
+@router.get(
+    "/projects/{project_id}/vcs/connection/audit",
+    response_model=ListEnvelope[RepositoryConnectionAuditOut],
+)
+def get_connection_audit(
+    project_id: str,
+    user: CurrentUser,
+    db: Annotated[DbSession, Depends(get_session)],
+) -> ListEnvelope[RepositoryConnectionAuditOut]:
+    audits = get_integration_service().get_connection_audits(db, project_id)
+    return collection(
+        [RepositoryConnectionAuditOut.of(audit) for audit in audits], total=len(audits)
+    )

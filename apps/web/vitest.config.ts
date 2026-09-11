@@ -21,6 +21,10 @@ export default defineConfig({
     include: [
       "src/**/*.test.ts",
       "src/**/*.test.tsx",
+      // app/ 아래의 테스트도 포함한다. 빠져 있는 동안 app/layout.test.tsx가
+      // 한 번도 돌지 않았고, 브랜드가 바뀌어도 아무도 알려 주지 않았다.
+      "app/**/*.test.ts",
+      "app/**/*.test.tsx",
       "../../packages/ui/src/**/*.test.ts",
       "../../packages/ui/src/**/*.test.tsx",
     ],

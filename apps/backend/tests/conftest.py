@@ -81,6 +81,23 @@ def signed_up(client: Any) -> dict[str, str]:
 
 
 @pytest.fixture
+def admin_user(client: Any) -> dict[str, str]:
+    """첫 가입자는 관리자다. 클라이언트에 관리자의 세션 쿠키를 설정한다."""
+
+    # Make admin_user the first user (so they become admin)
+    response = client.post(
+        "/api/v1/auth/signup",
+        json={
+            "email": "admin@example.invalid",
+            "display_name": "관리자",
+            "password": "correct-horse-battery",
+        },
+    )
+    assert response.status_code == 201, response.text
+    return dict(response.json()["data"])
+
+
+@pytest.fixture
 def project(client: Any, signed_up: dict[str, str]) -> dict[str, Any]:
     """로그인한 사용자가 만든 프로젝트 하나."""
 
@@ -90,3 +107,50 @@ def project(client: Any, signed_up: dict[str, str]) -> dict[str, Any]:
     )
     assert response.status_code == 201, response.text
     return dict(response.json()["data"])
+
+
+@pytest.fixture
+def other_user(client: Any, signed_up: dict[str, str]) -> dict[str, str]:
+    """두 번째 가입자는 일반 사용자다."""
+
+    response = client.post(
+        "/api/v1/auth/signup",
+        json={
+            "email": "other@example.invalid",
+            "display_name": "다른 사용자",
+            "password": "correct-horse-battery",
+        },
+    )
+    assert response.status_code == 201, response.text
+    return dict(response.json()["data"])
+
+
+@pytest.fixture
+def disabled_user(client: Any) -> dict[str, str]:
+    """비활성화된 사용자."""
+
+    from lep.common.db import get_session
+    from lep.modules.iam.infrastructure.models import UserRow
+
+    # Sign up the user
+    response = client.post(
+        "/api/v1/auth/signup",
+        json={
+            "email": "disabled@example.invalid",
+            "display_name": "비활성 사용자",
+            "password": "correct-horse-battery",
+        },
+    )
+    assert response.status_code == 201, response.text
+    user_data = dict(response.json()["data"])
+
+    # Disable the user
+    db = next(get_session())
+    try:
+        user = db.query(UserRow).filter(UserRow.id == user_data["id"]).one()
+        user.status = "suspended"
+        db.commit()
+    finally:
+        db.close()
+
+    return user_data

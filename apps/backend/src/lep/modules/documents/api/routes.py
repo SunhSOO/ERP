@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session as DbSession
 
 from ....common.db import get_session
 from ....common.envelope import Envelope, ListEnvelope, collection, single
+from ....common.pagination import DEFAULT_LIMIT, MAX_LIMIT, encode_cursor, paginate
 from ...iam.public import CurrentUser
 from ..domain.entities import (
     Document,
@@ -61,6 +62,10 @@ class DriveFileOut(BaseModel):
     size_bytes: int
     modified: date
     warning: str | None
+    source_mail_id: str | None = None
+    source_part_index: int | None = None
+    source_kind: str | None = None
+    sha256: str | None = None
 
     @classmethod
     def of(cls, item: DriveFile) -> DriveFileOut:
@@ -72,6 +77,10 @@ class DriveFileOut(BaseModel):
             size_bytes=item.size_bytes,
             modified=item.modified,
             warning=item.warning,
+            source_mail_id=item.source_mail_id,
+            source_part_index=item.source_part_index,
+            source_kind=item.source_kind,
+            sha256=item.sha256,
         )
 
 
@@ -123,21 +132,29 @@ async def retry_document(document_id: str, user: CurrentUser) -> Envelope[Docume
 
 
 @router.get("/projects/{project_id}/drive", response_model=ListEnvelope[DriveCategoryOut])
-async def get_drive(
+def get_drive(
     project_id: str,
     user: CurrentUser,
     db: Annotated[DbSession, Depends(get_session)],
 ) -> ListEnvelope[DriveCategoryOut]:
-    items = get_document_service().drive_summary(db, project_id)
+    items = get_document_service().drive_summary(db, project_id, actor=user)
     return collection([DriveCategoryOut.of(item) for item in items], total=len(items))
 
 
 @router.get("/projects/{project_id}/drive/files", response_model=ListEnvelope[DriveFileOut])
-async def list_drive_files(
+def list_drive_files(
     project_id: str,
     user: CurrentUser,
     db: Annotated[DbSession, Depends(get_session)],
     category: Annotated[DriveCategory | None, Query()] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
 ) -> ListEnvelope[DriveFileOut]:
-    items = get_document_service().list_files(db, project_id, category)
-    return collection([DriveFileOut.of(item) for item in items], total=len(items))
+    items = get_document_service().list_files(db, project_id, category, actor=user)
+    page = paginate(items, cursor=encode_cursor(offset), limit=limit)
+    return collection(
+        [DriveFileOut.of(item) for item in page.items],
+        next_cursor=page.next_cursor,
+        has_more=page.has_more,
+        total=page.total,
+    )

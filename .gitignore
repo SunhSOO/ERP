@@ -30,3 +30,7 @@ infra/vault/
 .lep-dev.db
 .lep-uploads/
 .vault/
+
+# Claude Code local audit runs
+.mail-review-runs/
+.task-runs/

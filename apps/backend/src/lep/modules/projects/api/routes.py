@@ -156,7 +156,7 @@ def project_summary(
         statement_count=delivery.statement_count,
         progress=delivery.progress_percent,
         vault=(SyncHealth(vault_health), vault_note),
-        mail_unclassified=unclassified_count(project_id),
+        mail_unclassified=unclassified_count(db, project_id, user),
         # 저장소 연동은 프로젝트마다 따로 설정해야 한다. 아직 없으면 그렇게 말한다.
         vcs=(SyncHealth.UNKNOWN, "저장소 미연결"),
     )

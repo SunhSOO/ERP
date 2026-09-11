@@ -1,9 +1,9 @@
-# Luminode ERP Platform — 화면 디자인 브리프
+# GAILAB ERP Platform — 화면 디자인 브리프
 
 이 문서는 Claude Design에 그대로 입력하기 위한 자립형 브리프다. 승인된 설계 문서
 (`docs/specs/01`, `03`, `06`)에서 화면 설계에 필요한 내용만 추출·재구성했다.
 
-- 대상 제품: Luminode ERP Platform (LEP)
+- 대상 제품: GAILAB ERP Platform (LEP)
 - 기준 문서: `06_UI_UX_INFORMATION_ARCHITECTURE.md`, `03_MODULE_SPECIFICATIONS.md`, `01_PRODUCT_REQUIREMENTS.md`
 - 작성일: 2026-09-07
 - 구현 현황: 저장소 기반(WP-PLT-001)만 완료. 화면은 전부 미구현이므로 제약 없이 새로 디자인한다.

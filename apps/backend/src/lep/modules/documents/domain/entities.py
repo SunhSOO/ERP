@@ -58,6 +58,35 @@ class DriveFile:
     size_bytes: int
     modified: date
     warning: str | None = None
+    #: Set only for approved mail attachment references (ADR-021). ``source_mail_id``
+    #: is the mail message_id, not a documents-owned identifier.
+    source_mail_id: str | None = None
+    source_part_index: int | None = None
+    source_kind: str | None = None
+    sha256: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class MailAttachmentLinkInput:
+    """One approved attachment to connect to the drive (ADR-021).
+
+    ``category`` accepts all four ``DriveCategory`` values, including
+    ``original`` — unlike ``DocumentService.add_file``, this path records an
+    approved reference rather than accepting a direct upload.
+    """
+
+    part_index: int
+    name: str
+    content_type: str
+    size_bytes: int
+    sha256: str
+    category: str
+
+
+@dataclass(frozen=True, slots=True)
+class MailAttachmentLinkRef:
+    id: str
+    part_index: int
 
 
 @dataclass(frozen=True, slots=True)

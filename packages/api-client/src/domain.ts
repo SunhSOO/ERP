@@ -209,6 +209,40 @@ export interface DriveFile {
   size_bytes: number;
   modified: string;
   warning: string | null;
+  /** 메일 첨부에서 연결된 파일이면 원본 메일 ID. ADR-021. */
+  source_mail_id: string | null;
+  /** 원본 메일 안에서 몇 번째 첨부였는지. 다운로드 프록시 주소에 쓴다. */
+  source_part_index: number | null;
+  /** 연결 출처 종류. 현재는 `"mail_attachment"`만 존재한다. */
+  source_kind: string | null;
+  sha256: string | null;
+}
+
+export interface MailAttachment {
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+  /** 메일 안에서 몇 번째 부분인지. 내려받기 주소에 쓴다. */
+  part_index: number;
+  /** 승인되어 드라이브에 연결된 documents 파일 ID. 미승인이면 `null`. */
+  linked_file_id: string | null;
+}
+
+/** 메일함 탭이 쓰는 분류 필터. `all`은 admin 전용 통합 조회다. */
+export type MailStatusFilter = "unclassified" | "project" | "unrelated" | "all";
+
+export interface MailCounts {
+  unclassified: number;
+  project: number;
+  unrelated: number;
+  all: number;
+}
+
+export interface MailProjectSuggestion {
+  project_id: string;
+  project_name: string;
+  confidence: Confidence;
+  reasons: string[];
 }
 
 export interface MailMessage {
@@ -220,11 +254,23 @@ export interface MailMessage {
   body: string;
   classification: "project" | "unclassified" | "unrelated";
   project_id: string | null;
+  /** 자동 분류가 추천하는 프로젝트. 승인 전에는 참고 정보일 뿐이다. ADR-021. */
+  suggested_project_id: string | null;
   intent: string | null;
   confidence: Confidence | null;
   milestone_code: string | null;
   note_id: string | null;
   handled: boolean;
+  /** 낙관적 잠금에 쓰는 버전. 승인/제외/추가승인 요청에 `expected_version`으로 보낸다. */
+  version: number;
+  approved_by: string | null;
+  approved_at: string | null;
+  /** 현재 사용자가 이 메일을 검토(승인/제외)할 수 있는지. 서버가 최종 판단한다. */
+  can_review: boolean;
+  /** 딸려 온 파일들. "자료 전달의 건"에서는 이쪽이 본론이다. */
+  attachments: MailAttachment[];
+  /** 프로젝트 맥락 기반 추천. 미분류 메일에만 계산한다 (Task 5). */
+  suggestions?: MailProjectSuggestion[];
 }
 
 export interface MailDetail {
@@ -238,6 +284,19 @@ export interface VcsStatus {
   last_sync_at: string;
   open_pull_requests: number;
   match_rate_percent: number;
+}
+
+export interface VcsConnection {
+  owner: string;
+  repository: string;
+  version: number;
+  can_edit: boolean;
+}
+
+export interface RepositoryConnection {
+  connected: boolean;
+  repository: string | null;
+  version: number;
 }
 
 export interface Mismatch {
@@ -258,11 +317,24 @@ export interface TaskMapping {
   aligned: boolean;
 }
 
+export type LlmRuntimeStatus =
+  | "connected"
+  | "degraded"
+  | "unavailable"
+  | "fixture"
+  | "not_configured";
+
 export interface LlmServer {
   name: string;
   network_note: string;
-  gpu_usage_percent: number;
-  active_model_count: number;
+  status: LlmRuntimeStatus;
+  detail: string;
+  /** GPU 사용률은 /models·/api/ps 어디에서도 보고되지 않는다. 항상 null. */
+  gpu_usage_percent: number | null;
+  /** 적재되어 실행 중인 모델 수. 측정할 수 없을 때만 null이며 0으로 꾸미지 않는다. */
+  active_model_count: number | null;
+  available_model_names: string[];
+  running_model_names: string[];
   project_count: number;
 }
 

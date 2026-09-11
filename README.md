@@ -1,4 +1,4 @@
-# Luminode ERP Platform
+# GAILAB ERP Platform
 
 저장소는 두 트랙을 병행 관리한다. ADR-016 참조.
 

@@ -278,11 +278,53 @@ export async function retryDocumentAction(
 
 // ── 깃허브 정합 ───────────────────────────────────────────────────────
 
+export async function updateVcsConnectionAction(
+  projectId: string,
+  _previous: ActionResult | null,
+  form: FormData,
+): Promise<ActionResult> {
+  const result = await guard(async () => {
+    const owner = String(form.get("owner") ?? "").trim();
+    const repo = String(form.get("repository") ?? "").trim();
+    const response = await call(`/api/v1/projects/${projectId}/vcs/connection`, {
+      method: "PUT",
+      json: {
+        repository: `${owner}/${repo}`,
+        expected_version: Number(form.get("expected_version") ?? 0),
+      },
+    });
+    if (!response.ok) return toProblem(response);
+    return { ok: true, message: "저장소 연동을 업데이트했습니다." };
+  });
+  if (result.ok) revalidatePath(`/projects/${projectId}/github`);
+  return result;
+}
+
 export async function syncVcsAction(projectId: string): Promise<ActionResult> {
   const result = await guard(async () => {
     const response = await call(`/api/v1/projects/${projectId}/vcs/sync`);
     if (!response.ok) return toProblem(response);
     return { ok: true, message: "저장소를 다시 읽었습니다." };
+  });
+  if (result.ok) revalidatePath(`/projects/${projectId}/github`);
+  return result;
+}
+
+export async function setConnectionAction(
+  projectId: string,
+  _previous: ActionResult | null,
+  form: FormData,
+): Promise<ActionResult> {
+  const result = await guard(async () => {
+    const response = await call(`/api/v1/projects/${projectId}/vcs/connection`, {
+      method: "PUT",
+      json: {
+        repository: String(form.get("repository") ?? ""),
+        expected_version: parseInt(String(form.get("expected_version") ?? "0"), 10),
+      },
+    });
+    if (!response.ok) return toProblem(response);
+    return { ok: true, message: "저장소를 연결했습니다." };
   });
   if (result.ok) revalidatePath(`/projects/${projectId}/github`);
   return result;

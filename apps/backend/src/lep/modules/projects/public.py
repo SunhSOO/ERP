@@ -13,7 +13,14 @@ from sqlalchemy.orm import Session as DbSession
 
 from .application.services import ProjectService
 
-__all__ = ["ProjectRef", "get_project_service", "project_exists", "require_project"]
+__all__ = [
+    "ProjectContextRef",
+    "ProjectRef",
+    "get_project_service",
+    "list_project_contexts",
+    "project_exists",
+    "require_project",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,6 +30,16 @@ class ProjectRef:
     id: str
     code: str
     name: str
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectContextRef:
+    """Project context for recommendation scoring: code, name, and customer."""
+
+    id: str
+    code: str
+    name: str
+    customer_name: str
 
 
 def get_project_service(db: DbSession) -> ProjectService:
@@ -38,3 +55,18 @@ def require_project(db: DbSession, project_id: str) -> ProjectRef:
 
     project = ProjectService(db).get_project(project_id)
     return ProjectRef(id=project.id, code=project.code, name=project.name)
+
+
+def list_project_contexts(db: DbSession) -> list[ProjectContextRef]:
+    """Return all active projects' context for recommendation scoring."""
+
+    projects = ProjectService(db).list_projects(include_archived=False)
+    return [
+        ProjectContextRef(
+            id=p.id,
+            code=p.code,
+            name=p.name,
+            customer_name=p.customer_name,
+        )
+        for p in projects
+    ]

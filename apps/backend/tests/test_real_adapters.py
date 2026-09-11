@@ -412,23 +412,38 @@ def test_korean_subject_headers_are_decoded() -> None:
 
 
 def test_sender_domain_decides_the_project() -> None:
+    """ADR-021: 발신 도메인 일치는 추천일 뿐이다.
+
+    사람이 승인하기 전에는 ``project_id``를 확정하지 않는다. 확정 후보는
+    ``suggested_project_id``에만 담기고, 분류는 unclassified로 남는다.
+    """
+
     parsed = _hiworks()._to_message(
         _raw_mail("자료 공유", "이서영 <lee@daon-corp.example>", "첨부드립니다."), "uid-001"
     )
 
     assert parsed is not None
-    assert parsed.project_id == "prj-daon"
+    assert parsed.project_id is None
+    assert parsed.classification.value == "unclassified"
+    assert parsed.suggested_project_id == "prj-daon"
     assert parsed.sender_org == "daon-corp.example"
 
 
-def test_unknown_domain_is_marked_unrelated() -> None:
+def test_unknown_domain_has_no_suggestion_but_is_still_unclassified() -> None:
+    """ADR-021: 실제 상태(project/unrelated)는 사람 승인 뒤에만 DB에 생긴다.
+
+    원본 어댑터는 도메인이 알려지지 않았다고 해서 스스로 "무관"으로 확정하지
+    않는다. 그건 검토 유스케이스의 몫이다.
+    """
+
     parsed = _hiworks()._to_message(
         _raw_mail("정기 점검 안내", "총무팀 <admin@other.invalid>", "안내드립니다."), "uid-001"
     )
 
     assert parsed is not None
     assert parsed.project_id is None
-    assert parsed.classification.value == "unrelated"
+    assert parsed.classification.value == "unclassified"
+    assert parsed.suggested_project_id is None
 
 
 def test_schedule_wording_is_detected_but_never_claimed_as_certain() -> None:
@@ -497,3 +512,92 @@ def test_the_adapter_never_sends_a_command_that_can_delete_mail() -> None:
     # 반대로 RSET은 반드시 있어야 한다. QUIT이 삭제를 확정하는 프로토콜에서
     # 삭제 표시를 되돌리는 값싼 보험이다.
     assert "client.rset()" in source
+
+
+# ── 메일 본문과 첨부 ──────────────────────────────────────────────────────
+
+
+def _html_mail_with_attachment() -> Message:
+    """하이웍스에서 실제로 오는 모양.
+
+    본문이 text/html뿐이고 text/plain이 없다. 첨부 파일명은 RFC 2047로
+    인코딩돼 온다.
+    """
+
+    from email.mime.application import MIMEApplication
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+
+    message = MIMEMultipart()
+    message["From"] = "지평진 <jpj@daon-corp.example>"
+    message["Subject"] = "정수장 데이터 참고 자료 전달"
+    message["Date"] = "Mon, 07 Sep 2026 14:20:00 +0900"
+    message.attach(
+        MIMEText("<html><body><p>자료 전달드립니다.</p><p>검토 부탁드립니다.</p>"
+                 "<script>ignored()</script></body></html>", "html", "utf-8")
+    )
+    part = MIMEApplication(b"PK\x03\x04zip-bytes", _subtype="octet-stream")
+    part.add_header("Content-Disposition", "attachment", filename="약품_소독_공정.pdf")
+    message.attach(part)
+    return message
+
+
+def test_an_html_only_body_is_not_empty() -> None:
+    """text/plain만 찾으면 이 메일들의 본문이 통째로 빈 문자열이 된다.
+
+    화면에는 내용 없는 메일처럼 보이고, 키워드 의도 추정도 아무것도 못 읽는다.
+    """
+
+    parsed = _hiworks()._to_message(_html_mail_with_attachment(), "uid-001")
+
+    assert parsed is not None
+    assert "자료 전달드립니다" in parsed.body
+    assert "검토 부탁드립니다" in parsed.body
+    # script 안의 내용은 본문이 아니다.
+    assert "ignored" not in parsed.body
+
+
+def test_attachments_are_listed_with_readable_names() -> None:
+    """"자료 전달의 건"에서는 첨부가 본론이다. 목록에 없으면 메일이 반쪽이다."""
+
+    parsed = _hiworks()._to_message(_html_mail_with_attachment(), "uid-001")
+
+    assert parsed is not None
+    assert len(parsed.attachments) == 1
+    attachment = parsed.attachments[0]
+    assert attachment.filename == "약품_소독_공정.pdf"
+    assert attachment.size_bytes > 0
+
+
+def test_an_rfc2047_encoded_filename_is_decoded() -> None:
+    """인코딩된 파일명을 그대로 두면 화면에 `=?utf-8?B?...?=`가 뜬다."""
+
+    from email.mime.application import MIMEApplication
+    from email.mime.multipart import MIMEMultipart
+
+    message = MIMEMultipart()
+    message["From"] = "lee@daon-corp.example"
+    message["Subject"] = "자료"
+    part = MIMEApplication(b"bytes", _subtype="octet-stream")
+    # 실제 메일에서 온 형태. `V12문서_피드백.pdf`를 base64로 감싼 것이다.
+    part.add_header(
+        "Content-Disposition", "attachment",
+        filename="=?utf-8?B?VjEy66y47IScX+2UvOuTnOuwsS5wZGY=?=",
+    )
+    message.attach(part)
+
+    parsed = _hiworks()._to_message(message, "uid-002")
+
+    assert parsed is not None
+    assert parsed.attachments[0].filename == "V12문서_피드백.pdf"
+
+
+def test_an_attachment_body_is_not_carried_in_the_listing() -> None:
+    """3.6MB짜리 zip이 오간다. 목록에 실어 나르면 화면이 그 무게를 진다."""
+
+    parsed = _hiworks()._to_message(_html_mail_with_attachment(), "uid-001")
+
+    assert parsed is not None
+    # 첨부 내용은 담지 않는다. 이름과 크기와 위치만 있다.
+    assert not hasattr(parsed.attachments[0], "content")
+    assert parsed.attachments[0].part_index >= 0
