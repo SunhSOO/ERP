@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Luminode ERP Platform",
-  description: "Luminode ERP foundation shell",
+  title: "GAILAB ERP Platform",
+  description: "GAILAB ERP foundation shell",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

@@ -4,6 +4,7 @@ import { resolveMismatchAction, syncVcsAction } from "@/src/shared/data/actions"
 import { ActionButton } from "@/src/shared/ui/ActionButton";
 import { PageHeader } from "@/src/shared/ui/PageHeader";
 import { linkHealth, taskStatus } from "@/src/shared/ui/status";
+import { GitHubConnectionForm } from "@/src/widgets/github/GitHubConnectionForm";
 import type { TaskStatus } from "@lep/api-client";
 
 export const dynamic = "force-dynamic";
@@ -15,11 +16,15 @@ export default async function GithubPage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
-  const [status, mismatches, mappings] = await Promise.all([
+  const [status, connection, mismatches, mappings] = await Promise.all([
     gateway.getVcs(projectId),
+    gateway.getConnection(projectId),
     gateway.listMismatches(projectId),
     gateway.listMappings(projectId),
   ]);
+
+  const user = await gateway.me();
+  const canEdit = !!(user && user.role === "admin");
 
   const health = linkHealth(status.health);
   const open = mismatches.filter((item) => !item.resolved);
@@ -31,6 +36,12 @@ export default async function GithubPage({
           <ActionButton action={syncVcsAction.bind(null, projectId)}>지금 동기화</ActionButton>
         }
         title="깃허브 연동"
+      />
+
+      <GitHubConnectionForm
+        projectId={projectId}
+        connection={connection}
+        canEdit={canEdit}
       />
 
       <StatBar

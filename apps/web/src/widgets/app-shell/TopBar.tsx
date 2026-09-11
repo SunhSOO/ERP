@@ -21,10 +21,10 @@ export function TopBar({ status, user }: TopBarProps) {
           aria-hidden="true"
           className="grid h-[22px] w-[22px] place-items-center bg-accent font-heading text-[13px] font-semibold text-bg"
         >
-          L
+          G
         </span>
         <span className="font-heading text-[17px] font-semibold tracking-wide text-text">
-          LUMINODE
+          GAILAB
         </span>
       </a>
 

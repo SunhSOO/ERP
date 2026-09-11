@@ -14,10 +14,10 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
             aria-hidden="true"
             className="grid h-[26px] w-[26px] place-items-center bg-accent font-heading text-[15px] font-semibold text-bg"
           >
-            L
+            G
           </span>
           <span className="font-heading text-[19px] font-semibold tracking-wide text-text">
-            LUMINODE
+            GAILAB
           </span>
         </div>
         {children}

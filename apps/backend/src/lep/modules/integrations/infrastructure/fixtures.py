@@ -3,9 +3,12 @@
 목업 데이터다. 실제 고객·직원 정보가 아니다. AGENTS.md 1절 7항.
 자격증명 값을 담지 않는다. 설정 여부와 상태만 담는다.
 
-Real adapters arrive in WP-PKD-031 (GitHub), WP-PKD-032 (Obsidian),
-WP-PKD-033 (local LLM) and WP-PKD-034 (Hiworks). Each needs an operator-supplied
-input that does not exist yet, recorded here as ``missing_input``.
+Real adapters arrive in WP-PKD-031 (GitHub), WP-PKD-032 (Obsidian) and
+WP-PKD-034 (Hiworks). WP-PKD-033A adds a real, read-only LLM runtime status
+adapter (``infrastructure/llm_runtime.py``); the LLM credential row below is
+therefore no longer hardcoded here but passed in from the application layer.
+Each remaining fixture needs an operator-supplied input that does not exist
+yet, recorded here as ``missing_input``.
 """
 
 from __future__ import annotations
@@ -41,16 +44,15 @@ _MAPPINGS: list[tuple[str, TaskMapping]] = []
 
 _SERVER = [
     {
-        "name": "사내 GPU 서버 (미설정)",
+        "name": "사내 GPU 서버",
         "network_note": (
-            "모든 문서·메일·회의록 처리는 사내 서버의 로컬 모델에서만 이루어집니다. "
-            "외부 API로 전송되지 않습니다."
+            "설정된 추론 서버의 연결 상태와 모델 목록을 조회합니다. 프로젝트별 모델 "
+            "저장·적용 기능은 아직 제공되지 않습니다."
         ),
-        "gpu_usage_percent": 0,
     }
 ]
 
-#: 프로젝트별 모델은 로컬 LLM 어댑터(WP-PKD-033)와 함께 들어온다.
+#: 프로젝트별 모델 배정은 아직 저장소가 없어 요청 사이에 남지 않는다.
 _MODELS: list[ProjectModel] = []
 
 
@@ -115,7 +117,23 @@ def _mail_credential() -> Credential:
     )
 
 
-def _credentials(project_id: str, converter: tuple[str, str]) -> list[Credential]:
+#: Backward-compatible default for callers that still invoke ``credentials()``
+#: with two positional arguments (pre-WP-PKD-033A signature). Always
+#: NOT_CONFIGURED: never claims a runtime probe that was not actually run.
+_DEFAULT_LLM_CREDENTIAL = Credential(
+    kind="llm",
+    label="로컬 LLM 서버",
+    health=LinkHealth.NOT_CONFIGURED,
+    detail="실제 추론 서버가 설정되지 않았습니다.",
+    missing_input="추론 서버 주소와 모델 이름",
+)
+
+
+def _credentials(
+    project_id: str,
+    converter: tuple[str, str],
+    llm: Credential = _DEFAULT_LLM_CREDENTIAL,
+) -> list[Credential]:
     return [
         _vault_credential(),
         _mail_credential(),
@@ -127,13 +145,7 @@ def _credentials(project_id: str, converter: tuple[str, str]) -> list[Credential
             missing_input="개인 액세스 토큰과 대상 저장소",
         ),
         _converter_credential(converter),
-        Credential(
-            kind="llm",
-            label="로컬 LLM 서버",
-            health=LinkHealth.NOT_CONFIGURED,
-            detail="사내 GPU 추론 서버 주소가 아직 없습니다.",
-            missing_input="추론 서버 주소",
-        ),
+        llm,
     ]
 
 
@@ -178,5 +190,10 @@ class FixtureIntegrationAdapter:
         _MODELS.append(model)
         return model
 
-    def credentials(self, project_id: str, converter: tuple[str, str]) -> list[Credential]:
-        return _credentials(project_id, converter)
+    def credentials(
+        self,
+        project_id: str,
+        converter: tuple[str, str],
+        llm: Credential = _DEFAULT_LLM_CREDENTIAL,
+    ) -> list[Credential]:
+        return _credentials(project_id, converter, llm)

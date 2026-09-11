@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { Card, CardTitle, EmptyState, StatusTag, Table, Th } from "@lep/ui";
 import { gateway } from "@/src/shared/data/gateway";
+import { DRIVE_PAGE_SIZE, fetchDriveFilesPage, normalizeDriveOffset } from "@/src/shared/data/mail-review";
 import { PageHeader } from "@/src/shared/ui/PageHeader";
+import { DriveMailLink } from "@/src/widgets/mail/DriveMailLink";
 
 export const dynamic = "force-dynamic";
 
@@ -10,20 +12,33 @@ function formatSize(bytes: number): string {
   return `${Math.round(bytes / 1000)}KB`;
 }
 
+function categoryHref(category: string): string {
+  // 분류를 바꾸는 링크는 항상 offset을 되돌린다(쿼리 생략 = 0쪽).
+  return `?${new URLSearchParams({ category }).toString()}`;
+}
+
+function pageOffsetHref(category: string | undefined, offset: number): string {
+  const query = new URLSearchParams();
+  if (category) query.set("category", category);
+  query.set("offset", String(offset));
+  return `?${query.toString()}`;
+}
+
 /** 10 프로젝트 드라이브. */
 export default async function DrivePage({
   params,
   searchParams,
 }: {
   params: Promise<{ projectId: string }>;
-  searchParams: Promise<{ category?: string }>;
+  searchParams: Promise<{ category?: string; offset?: string }>;
 }) {
   const { projectId } = await params;
-  const { category } = await searchParams;
+  const { category, offset: offsetParam } = await searchParams;
+  const offset = normalizeDriveOffset(offsetParam);
 
   const categories = await gateway.getDrive(projectId);
   const active = categories.find((item) => item.category === category) ?? categories[0];
-  const files = await gateway.listDriveFiles(projectId, active?.category);
+  const { files, hasMore } = await fetchDriveFilesPage(projectId, active?.category, offset);
 
   return (
     <>
@@ -33,7 +48,7 @@ export default async function DrivePage({
         <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4 p-0">
           {categories.map((item) => (
             <li key={item.category}>
-              <Link className="block no-underline" href={`?category=${item.category}`}>
+              <Link className="block no-underline" href={categoryHref(item.category)}>
                 <Card className={item.category === active?.category ? "border-accent" : undefined}>
                   <div className="flex items-baseline justify-between gap-2">
                     <CardTitle>{item.label}</CardTitle>
@@ -50,6 +65,25 @@ export default async function DrivePage({
           ))}
         </ul>
       </section>
+
+      <nav aria-label="드라이브 파일 페이지" className="flex items-center gap-2">
+        {offset > 0 ? (
+          <Link
+            className="no-underline"
+            href={pageOffsetHref(active?.category, Math.max(0, offset - DRIVE_PAGE_SIZE))}
+          >
+            이전
+          </Link>
+        ) : null}
+        {hasMore ? (
+          <Link
+            className="no-underline"
+            href={pageOffsetHref(active?.category, offset + DRIVE_PAGE_SIZE)}
+          >
+            다음
+          </Link>
+        ) : null}
+      </nav>
 
       {files.length === 0 ? (
         <EmptyState
@@ -80,7 +114,15 @@ export default async function DrivePage({
                     </>
                   ) : null}
                 </td>
-                <td className="text-muted">{file.origin}</td>
+                <td className="text-muted">
+                  {file.origin}
+                  {file.source_kind === "mail_attachment" ? (
+                    <>
+                      {" "}
+                      <DriveMailLink file={file} projectId={projectId} />
+                    </>
+                  ) : null}
+                </td>
                 <td className="tabular-nums">{formatSize(file.size_bytes)}</td>
                 <td className="tabular-nums">{file.modified}</td>
               </tr>

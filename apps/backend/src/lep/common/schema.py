@@ -23,7 +23,10 @@ def load_all_models() -> None:
 
     # noqa comments: imported for the side effect of registering mappers.
     from ..modules.delivery.infrastructure import models as delivery_models  # noqa: F401
+    from ..modules.documents.infrastructure import mail_link_models  # noqa: F401
     from ..modules.iam.infrastructure import models as iam_models  # noqa: F401
+    from ..modules.integrations.infrastructure import models as integrations_models  # noqa: F401
+    from ..modules.mail.infrastructure import models as mail_models  # noqa: F401
     from ..modules.projects.infrastructure import models as project_models  # noqa: F401
 
 

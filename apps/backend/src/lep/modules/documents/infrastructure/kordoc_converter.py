@@ -17,13 +17,18 @@ infrastructure layer changes when it replaces the fixture.
 
 from __future__ import annotations
 
-import shutil
+import hashlib
+import logging
 import subprocess
 import tempfile
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
 from ....common.adapters import kordoc_cli, kordoc_output_dir, kordoc_use_npx
+from ..domain.ports import ArtifactConversionResult, ConversionArtifact
+
+logger = logging.getLogger(__name__)
 
 #: kordoc's presets. The mockup's 보고서 template maps to ``보고서``.
 #: Keys are what our screens call things; values are what kordoc expects.
@@ -50,6 +55,11 @@ TIMEOUT_SECONDS = 120
 #: ``encoding="utf-8"`` explicitly so error messages survive instead of being
 #: lost to a thread exception.
 OUTPUT_ENCODING = "utf-8"
+
+#: How many fresh UUIDs to try before giving up on finding an unused artifact
+#: name. Collisions are practically impossible; this only guards against a
+#: stale file left over from a previous run reusing the same name.
+MAX_ARTIFACT_NAME_ATTEMPTS = 5
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,65 +111,126 @@ class KordocConverter:
 
         Returns ``(succeeded, failure_detail)``. A failure is reported as a
         failure; the pipeline screen shows it with a retry rather than claiming
-        the document is ready.
+        the document is ready. Kept for callers that only need the boolean
+        outcome; see ``convert_with_artifact`` for the stored artifact identity.
+        """
+
+        result = self.convert_with_artifact(markdown, template=template)
+        return result.succeeded, result.detail
+
+    def convert_with_artifact(
+        self, markdown: str, *, template: str
+    ) -> ArtifactConversionResult:
+        """Generate an HWPX from Markdown and persist it as a distinct artifact.
+
+        The stored file name is a generated UUID inside the configured output
+        directory; caller-supplied filenames or paths never decide where the
+        artifact is stored, and an existing artifact is never overwritten.
+        Failure details are sanitized categories: no markdown content,
+        converter stdout/stderr, or local filesystem paths are included.
         """
 
         if not markdown.strip():
-            return False, "빈 문서는 변환할 수 없습니다."
+            return ArtifactConversionResult(False, "빈 문서는 변환할 수 없습니다.")
 
         preset = PRESETS.get(template, DEFAULT_PRESET)
         destination = Path(self.output_dir)
 
         try:
             destination.mkdir(parents=True, exist_ok=True)
-        except OSError as exc:
-            return False, f"출력 디렉터리를 만들지 못했습니다: {exc}"
+        except OSError:
+            return ArtifactConversionResult(False, "출력 디렉터리를 만들지 못했습니다.")
 
-        with tempfile.TemporaryDirectory(prefix="lep-kordoc-") as workspace:
-            source = Path(workspace) / "input.md"
-            produced = Path(workspace) / "output.hwpx"
-            source.write_text(markdown, encoding="utf-8")
+        try:
+            with tempfile.TemporaryDirectory(prefix="lep-kordoc-") as workspace:
+                source = Path(workspace) / "input.md"
+                produced = Path(workspace) / "output.hwpx"
+                source.write_text(markdown, encoding="utf-8")
 
+                try:
+                    result = subprocess.run(  # noqa: S603
+                        [
+                            *self._command(),
+                            "generate",
+                            str(source),
+                            "-o",
+                            str(produced),
+                            "--preset",
+                            preset,
+                        ],
+                        capture_output=True,
+                        timeout=TIMEOUT_SECONDS,
+                        check=False,
+                        text=True,
+                        encoding=OUTPUT_ENCODING,
+                        errors="replace",
+                    )
+                except FileNotFoundError:
+                    return ArtifactConversionResult(
+                        False, "변환기를 실행할 수 없습니다. node 또는 npx가 필요합니다."
+                    )
+                except subprocess.TimeoutExpired:
+                    return ArtifactConversionResult(
+                        False, f"변환이 {TIMEOUT_SECONDS}초 안에 끝나지 않았습니다."
+                    )
+                except OSError:
+                    return ArtifactConversionResult(False, "변환기를 실행하지 못했습니다.")
+
+                if result.returncode != 0:
+                    return ArtifactConversionResult(False, "변환기가 오류로 종료했습니다.")
+
+                if not produced.is_file() or produced.stat().st_size == 0:
+                    return ArtifactConversionResult(False, "변환기가 파일을 만들지 않았습니다.")
+
+                payload = produced.read_bytes()
+                if not payload:
+                    return ArtifactConversionResult(False, "변환기가 파일을 만들지 않았습니다.")
+        except OSError:
+            return ArtifactConversionResult(False, "임시 작업 공간을 사용하지 못했습니다.")
+
+        artifact = self._store_artifact(payload, destination)
+        if artifact is None:
+            return ArtifactConversionResult(False, "생성된 파일을 저장하지 못했습니다.")
+
+        return ArtifactConversionResult(True, None, artifact)
+
+    def _store_artifact(
+        self, payload: bytes, destination: Path
+    ) -> ConversionArtifact | None:
+        """Write ``payload`` under a generated, unused name in ``destination``.
+
+        Uses exclusive binary creation (``Path.open("xb")``, not the raw
+        ``os.O_CREAT | os.O_EXCL`` flags) so a concurrent or repeated
+        conversion never overwrites a previously stored artifact, and so the
+        write is never subject to the CRT text-mode translation that
+        ``os.open`` falls into on Windows without ``os.O_BINARY``. Because the
+        exclusive open guarantees *this* call created the file, a write
+        failure only ever removes the candidate it just created, never a
+        pre-existing file that caused a naming collision.
+        """
+
+        checksum = hashlib.sha256(payload).hexdigest()
+        for _ in range(MAX_ARTIFACT_NAME_ATTEMPTS):
+            candidate = destination / f"{uuid.uuid4().hex}.hwpx"
             try:
-                result = subprocess.run(  # noqa: S603
-                    [
-                        *self._command(),
-                        "generate",
-                        str(source),
-                        "-o",
-                        str(produced),
-                        "--preset",
-                        preset,
-                    ],
-                    capture_output=True,
-                    timeout=TIMEOUT_SECONDS,
-                    check=False,
-                    text=True,
-                    encoding=OUTPUT_ENCODING,
-                    errors="replace",
-                )
-            except FileNotFoundError:
-                return False, "변환기를 실행할 수 없습니다. node 또는 npx가 필요합니다."
-            except subprocess.TimeoutExpired:
-                return False, f"변환이 {TIMEOUT_SECONDS}초 안에 끝나지 않았습니다."
-            except OSError as exc:
-                return False, f"변환기를 실행하지 못했습니다: {exc}"
-
-            if result.returncode != 0:
-                detail = (result.stderr or result.stdout).strip().splitlines()
-                return False, detail[-1] if detail else "변환기가 오류로 종료했습니다."
-
-            if not produced.is_file() or produced.stat().st_size == 0:
-                return False, "변환기가 파일을 만들지 않았습니다."
-
-            # Keep the artefact so the screen can offer it later. The temporary
-            # workspace disappears with this block.
+                handle = candidate.open("xb")
+            except FileExistsError:
+                continue
+            except OSError:
+                return None
             try:
-                shutil.copy2(produced, destination / "latest.hwpx")
-            except OSError as exc:
-                return False, f"생성된 파일을 저장하지 못했습니다: {exc}"
-
-        return True, None
+                with handle:
+                    handle.write(payload)
+            except OSError:
+                try:
+                    candidate.unlink(missing_ok=True)
+                except OSError:
+                    logger.warning("kordoc artifact cleanup failed after a write error")
+                return None
+            return ConversionArtifact(
+                path=str(candidate), size_bytes=len(payload), sha256=checksum
+            )
+        return None
 
     def _command(self) -> list[str]:
         if self.cli_path:

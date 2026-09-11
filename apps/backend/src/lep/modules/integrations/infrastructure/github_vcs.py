@@ -31,7 +31,7 @@ from ..domain.entities import (
     TaskMapping,
     VcsStatus,
 )
-from .fixtures import FixtureIntegrationAdapter
+from .fixtures import _DEFAULT_LLM_CREDENTIAL, FixtureIntegrationAdapter
 
 #: Task codes this adapter recognises in repository text.
 TASK_CODE = re.compile(r"\b(TSK-\d+|WP-[A-Z]+(?:-[A-Z]+)?-\d+)\b")
@@ -351,16 +351,19 @@ class GitHubVcsAdapter:
 
 @dataclass
 class GitHubIntegrationAdapter:
-    """Real GitHub reads with fixture AI settings.
+    """Real GitHub reads with fixture project-model settings.
 
-    Only the repository half of this module has a real backend today. The local
-    LLM half keeps its fixture until WP-PKD-033, and mixing them here is honest
-    about that: screen 09 shows the LLM server as not configured.
+    Only the repository half of this module has a real backend today; the
+    project-model list (name, priority, GPU share) has no persistence yet and
+    stays on the fixture. LLM *runtime status* is not part of this adapter at
+    all — ``IntegrationService.server()`` and ``.credentials()`` read it
+    directly through a separate ``LlmRuntimePort`` (WP-PKD-033A).
     """
 
     github: GitHubVcsAdapter
-    #: The repository half goes real; the AI-settings half stays on the fixture
-    #: until WP-PKD-033, so this is deliberately the concrete fixture type.
+    #: The repository half goes real; the project-model list stays on the
+    #: fixture until settings persistence exists, so this is deliberately the
+    #: concrete fixture type.
     fallback: FixtureIntegrationAdapter
     _cache: dict[str, tuple[VcsStatus, list[Mismatch], list[TaskMapping]]] | None = None
 
@@ -423,7 +426,9 @@ class GitHubIntegrationAdapter:
             raise ValueError(f"저장소가 설정되지 않았습니다: {project_id}")
         return loaded[0]
 
-    # ── AI settings stay on the fixture until WP-PKD-033 ───────────────────
+    # ── AI settings: name/network_note and the project-model list stay on the
+    # fixture (no settings persistence yet). Runtime status is read live and
+    # lives entirely outside this adapter — see IntegrationService.server(). ─
     def server(self) -> dict[str, object]:
         return self.fallback.server()
 
@@ -433,8 +438,13 @@ class GitHubIntegrationAdapter:
     def replace_model(self, model: ProjectModel) -> ProjectModel:
         return self.fallback.replace_model(model)
 
-    def credentials(self, project_id: str, converter: tuple[str, str]) -> list[Credential]:
-        base = self.fallback.credentials(project_id, converter)
+    def credentials(
+        self,
+        project_id: str,
+        converter: tuple[str, str],
+        llm: Credential = _DEFAULT_LLM_CREDENTIAL,
+    ) -> list[Credential]:
+        base = self.fallback.credentials(project_id, converter, llm)
         repo = self.github.repo_for(project_id)
         if repo is None:
             return base

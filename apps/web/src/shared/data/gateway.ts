@@ -15,6 +15,7 @@ import type {
   Project,
   ProjectModel,
   ProjectSummary,
+  RepositoryConnection,
   SignupState,
   Statement,
   Task,
@@ -117,6 +118,9 @@ export const gateway = {
     get<MailMessage>(`/api/v1/mail/${messageId}`),
 
   getVcs: (id: string): Promise<VcsStatus> => get<VcsStatus>(`/api/v1/projects/${id}/vcs`),
+
+  getConnection: (id: string): Promise<RepositoryConnection> =>
+    get<RepositoryConnection>(`/api/v1/projects/${id}/vcs/connection`),
 
   listMismatches: (id: string): Promise<Mismatch[]> =>
     list<Mismatch>(`/api/v1/projects/${id}/vcs/mismatches`),
